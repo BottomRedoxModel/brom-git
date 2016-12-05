@@ -1,0 +1,13 @@
+build/
+*.nc
+data/BROM_out.nc
+data/Hydrophysics3.dat
+data/Vertical_grid.dat
+data/finish.dat
+data/output*.dat
+data/sal2_new.dat
+data/tem2_new.dat
+data/BROM_Berre_out.nc
+data/Hydrophysics.dat
+*.png
+*~

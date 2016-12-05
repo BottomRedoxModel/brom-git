@@ -1,0 +1,363 @@
+# IMPORTANT !!!! _ <TAB> is NOT allowed here, used <Space> only !!!!
+# Each entry must have 6 spaces before the parameter name
+instances:
+  brom:
+    initialization:
+##---Paramters for grid-------(see io_ascii.f90/make_vert_grid for a grid diagram)-----------------
+      water_layer_thickness: 60  # Thickness of the water column [m] (may overriden by netCDF input, see below) 
+      k_wat_bbl: 30               # Number of levels above the water/BBL boundary  (may be overriden by netCDF input, see below)    
+      bbl_thickness: 0.25          # Thickness of the high-resolution layer overlying the sediments (model "benthic boundary layer") [m] (default = 0.5 m)
+                                  #   This should be thinner than the full viscous+logarithmic layer, but thicker than the viscous layer
+                                  #   Typical thicknesses for full viscous+logarithmic layer are 1 m and 10 m for deep sea and shelf respectively (Wimbush 2012)
+      hz_bbl_min: 0.015            # Minimum allowed layer thickness in the BBL near the SWI [m] (default = 0.02 m)
+      hz_sed_min: 0.0005          # Minimum layer thickness in the sediments near the SWI [m] (default = 0.0005 m)
+      hz_sed_max: 0.01            # Maximum layer thickness deeper in the sediments [m] (default = 0.01 m)
+      k_min: 1                    # Minimum k number defining the layer that is in contact with the atmosphere (default = 1) 
+      k_points_below_water: 0     # Number of levels below the water/BBL boundary (default = 20)
+      i_min: 1                    # Minimum i number (default = 1)
+      i_water: 23                  # Number of i for water column (default = 1)       
+      i_max: 23                    # Maximum i number  (default = 1)
+#Note: (i_min,i_water,i_max) should be (1,1,1) for 1D applications
+#
+#
+##---Boundary conditions---------------------------------------------------------------------------
+#
+#Here we set the type of boundary condition using bctype_top_<variable name> and bctype_bottom_<variable name>
+#     0 to use surface fluxes from FABM where parameterized, otherwise no flux (default, does not need to be explicitly set)
+#     1 for constant Dirichlet, specified by bc_top_<variable name> or bc_bottom_<variable name>
+#       E.g. bctype_bottom_niva_brom_bio_O2: 1
+#            bc_bottom_niva_brom_bio_O2: 0.
+#     2 for sinusoidal Dirichlet, specified by bcpar_top_<variable name> or bcpar_bottom_<variable name>
+#            The model is: phi(t) = a1 + a2*sin(omega*(day-a3)) where omega = 2*pi/365
+#                                  => max(phi(t)) = a1+a2, min(phi(t)) = a1-a2, mean(phi(t)) = a1, peak at 91.25+a3 days
+#            Model parameters are specified by a1top_<variable name> etc.
+#       E.g. bctype_top_niva_brom_bio_NO3: 2
+#            a1top_niva_brom_bio_NO3: 3.0
+#            a2top_niva_brom_bio_NO3: 3.0
+#            a3top_niva_brom_bio_NO3: 60.
+#     3 for arbitrary Dirichlet, read from netCDF file (see I/O options to specify netCDF variable names)
+#     4 for arbitrary Dirichlet, read from ASCII file (see I/O options to specify netCDF variable names)
+#
+      bctype_top_niva_brom_redox_SO4: 4 # surface SO4 is calculated from SO4/Salinity ratio
+#      a1top_niva_brom_redox_SO4: 20000
+#      a2top_niva_brom_redox_SO4: 2
+#      a3top_niva_brom_redox_SO4: 60.
+      bctype_bottom_niva_brom_redox_SO4: 1
+      bc_bottom_niva_brom_redox_SO4: 9000.
+#
+      bctype_top_niva_brom_redox_Mn4: 1
+      bc_top_niva_brom_redox_Mn4: 10.E-4
+#
+      bctype_top_niva_brom_redox_Fe3: 1
+      bc_top_niva_brom_redox_Fe3: 1.E-4
+#
+      bctype_top_niva_brom_carb_Alk: 1
+      bc_top_niva_brom_carb_Alk: 2300.
+      bctype_bottom_niva_brom_carb_Alk: 1
+      bc_bottom_niva_brom_carb_Alk: 11500.
+#
+      bctype_bottom_niva_brom_carb_DIC: 1
+      bc_bottom_niva_brom_carb_DIC: 12000.
+#
+      bctype_bottom_niva_brom_bio_NH4: 1
+      bc_bottom_niva_brom_bio_NH4: 900.
+#
+      bctype_top_niva_brom_bio_NO3: 2
+      a1top_niva_brom_bio_NO3: 3. # 3
+      a2top_niva_brom_bio_NO3: 3.
+      a3top_niva_brom_bio_NO3: 60.
+      bctype_bottom_niva_brom_bio_NO3: 1
+      bc_bottom_niva_brom_bio_NO3: 0.
+#
+      bctype_top_niva_oxydep_NUT: 4
+#
+      surf_flux_with_diff: 0   # 1 to include surface fluxes in diffusion update, 0 to include in biogeochemical update (default = 0)
+      bott_flux_with_diff: 0   # 1 to include bottom fluxes in diffusion update, 0 to include in biogeochemical update (default = 0) 
+#
+#Here we convert bottom boundary values from 'mass/pore water ml' for dissolved and 'mass/mass' for solids into 'mass/total volume'
+#     0 not to convert 
+#     1 to convert 
+      bc_units_convert: 1
+#
+#
+##---Horizontal transport parameters------------------------------------------------------------------
+#
+#Here we specify horizontal transport (advection) model using htrans_<variable name>
+#     0 to assume no horizontal mixing (default, does not need to be explicitly set)
+#     1 for "box model" mixing model: hmix = hmix_rate*(X_0 - X) with X_0 specified by netCDF input file and hmix_rate specified here
+#     2 for "box model" mixing model: hmix = hmix_rate*(X_0 - X) with X_0 specified by ASCII input file and hmix_rate specified here     
+#
+      htrans_calc: 1
+#
+#
+##---Horizontal relaxation (side mixing with climatic data) parameters------------------------------------------------------------------
+#
+#Here we specify horizontal relaxation model using hmix_<variable name>
+#     0 to assume no horizontal mixing (default, does not need to be explicitly set)
+#     1 for "box model" mixing model: hmix = hmix_rate*(X_0 - X) with X_0 specified by netCDF input file and hmix_rate specified here
+#     2 for "box model" mixing model: hmix = hmix_rate*(X_0 - X) with X_0 specified by ASCII input file and hmix_rate specified here     
+#
+#      hmix_niva_brom_bio_NO3: 0
+#      hmix_niva_brom_bio_NH4: 0
+#      hmix_niva_brom_bio_PO4: 0
+#      hmix_niva_brom_redox_Si: 0
+#      hmix_niva_brom_bio_O2: 0
+#      hmix_niva_oxydep_Oxy: 0
+      hmix_niva_oxydep_NUT: 2
+      hmix_niva_oxydep_Oxy: 2
+      hmix_niva_oxydep_cod_CHON: 2
+#
+      hmix_rate_uniform: 100. # vertically uniform horizontal relaxation, 0 to exclude (default = 0)
+#
+#
+##---Ice model parameters--------------------------------------------------------------------------
+      use_hice: 0        # 1 to use ice thickness forcing "hice" from netCDF input
+#
+#
+##---Constant forcings-----------------------------------------------------------------------------
+      density: 1000.
+      wind_speed: 5.     # Wind speed 10 m above sea surface [m/s] (default = 8 m/s) 
+      pco2_atm: 380.     # Atmospheric partial pressure of CO2 [ppm] (default = 380 ppm)
+#
+#
+##---Surface irradiance model parameters-----------------------------------------------------------
+      use_Eair: 0        # 1 to use 24-hr average surface downwelling shortwave irradiance in air from netCDF input
+      lat_light: 50      # Latitude of modelled site [degrees north], e.g. Hardangerfjord station H6 is at 60.228N; Sleipner=50N; Saelen=60.33N
+      Io: 80.            # Theoretical maximum 24-hr average surface downwelling shortwave irradiance in air [W/m2] (default = 80 W/m2)
+                         #   This should include that effect of average cloud cover (local)
+      light_model: 0     # Specify light model: 0 for simple model based on ersem/light.f90
+                         #                      1 for extended model accounting for other particulates in BROM
+#
+#
+##---Light absorption model parameters ------------------------------------------------------------
+      Eair_to_PAR0: 0.5  # Factor to convert downwelling shortwave in air to scalar PAR in water (default = 0.5)
+                         #   Radiative transfer models suggest an average value ~ 0.5 but with ~10% variability
+                         #   at mid/high latitudes depending on season, latitude, and wind speed, see Mobley and Boss (2012), Figs. 5b, 8b. 
+      k0r:  0.04         # Background PAR attenuation [m-1] (default = 0.04 m-1, from ERSEM shortwave attenuation default)
+      kESS: 4e-05        # Specific PAR attenuation by silt [m^2/mg] (default = 4e-05 m^2/mg, from ERSEM shortwave attenuation default)
+      ESS:  0.           # Assumed (constant) concentration of silt [mg/m^3] (default = 0. mg/m^3, from ERSEM shortwave attenuation default)
+      kPhy: 0.003        # Specific PAR attenuation by phytoplankton [m^2/mg N] (default = 0.0023 m^2/mg N, from ERSEM shortwave attenuation default)
+                         #   From ERSEM Blackford (P1-P4), default = 0.0004 m^2/mg C * 5.68 mg C/mg N (Redfield ratio 106/16 mol/mol)
+                         #   Note misprint "e-3" instead of "e-4" in Blackford et al. (2004) Table 1
+      kPON: 0.05         # Specific PAR attenuation due to PON [m^2/mg N] (default = 0. m^2/mg N)
+# The following are only used if light_model = 1
+      kHet: 0.05        # Specific PAR attenuation due to zooplankton [m^2/mg N] (default = 0. m^2/mg N)
+      kDON: 0.01        # Specific PAR attenuation due to DON [m^2/mg N] (default = 0. m^2/mg N)
+      kB:   0.03        # Specific PAR attenuation due to bacteria [m^2/mg N] (default = 0. m^2/mg N)
+      kPIV: 0.05        # Specific PAR attenuation due to total particulate inorganic volume fraction (default = 0. m^-1)
+#
+#
+##---Assumed densities for particles in the model (may be used in light/sedimentation models)------
+#
+# Densities are specified by rho_<full variable name> and in same units as the model concentration
+# Any missing values will use the default density rho_def
+      rho_def:   3.0E7                     # Default density of solid particles [mmol/m3]
+      rho_niva_brom_bio_Phy: 1.5E7         # Density of (living) phytoplankton [mmolN/m3] (default = 1.4E6 mmolN/m3 from PON default)
+      rho_niva_brom_bio_PON: 1.5E7         # Density of (dead) particulate organic matter [mmolN/m3] (default = 1.4E6 mmolN/m3, from: 1.23 g WW/cm3 (Alldredge, Gotschalk, 1988), mg DW/mg WW=0.18 and mg DW /mg C=2 (Link et al.,2006))
+      rho_niva_brom_bio_Het: 1.5E7         # Density of (living) non-bacterial heterotrophs [mmolN/m3] (default = 1.4E6 mmolN/m3 from PON default)  
+      rho_niva_brom_redox_Baae: 1.5E7      # Density of (living) aerobic autotrophic bacteria [mmolN/m3] (default = 1.4E6 mmolN/m3 from PON default)
+      rho_niva_brom_redox_Bhae: 1.5E7      # Density of (living) aerobic heterotrophic bacteria [mmolN/m3] (default = 1.4E6 mmolN/m3 from PON default)
+      rho_niva_brom_redox_Baan: 1.5E7      # Density of (living) anaerobic autotrophic bacteria [mmolN/m3] (default = 1.4E6 mmolN/m3 from PON default)
+      rho_niva_brom_redox_Bhan: 1.5E7      # Density of (living) anaerobic heterotrophic bacteria [mmolN/m3] (default = 1.4E6 mmolN/m3 from PON default)
+      rho_niva_brom_redox_CaCO3: 2.80E7    # Density of calcium carbonate [mmolCa/m3] (default = 2.80E7 mmolCa/m3)
+      rho_niva_brom_redox_Fe3: 3.27E7      # Density of Fe3 [mmolFe/m3] (default = 3.27E7 mmolFe/m3)
+      rho_niva_brom_redox_FeCO3: 2.93E7    # Density of FeCO3 [mmolFe/m3] (default = 2.93E7 mmolFe/m3)
+      rho_niva_brom_redox_FeS: 5.90E7      # Density of FeS [mmolFe/m3] (default = 5.90E7 mmolFe/m3)
+      rho_niva_brom_redox_FeS2: 4.17E7     # Density of FeS2 [mmolFe/m3] (default = 4.17E7 mmolFe/m3)
+      rho_niva_brom_redox_Mn4: 5.78E7      # Density of Mn4 [mmolMn/m3] (default = 5.78E7 mmolMn/m3)
+      rho_niva_brom_redox_MnCO3: 3.20E7    # Density of MnCO3 [mmolMn/m3] (default = 3.20E7 mmolMn/m3)
+      rho_niva_brom_redox_MnS: 4.60E7      # Density of MnS [mmolMn/m3] (default = 4.60E7 mmolMn/m3)
+      rho_niva_brom_redox_S0: 6.56E7       # Density of S0 [mmolS/m3] (default = 6.56E7 mmolS/m3)
+      rho_niva_brom_redox_Sipart: 4.40E7   # Density of particulate silicate [mmolSi/m3] (default = 4.40E7 mmolSi/m3)
+#
+#
+##---Time stepping parameters----------------------------------------------------------------------
+      dt:          0.0025      # Time step in [days] (default = 0.0025 days)
+      freq_turb:   1           # Physical mixing time step = dt/freq_turb (default = 1)
+      freq_sed:    1           # Sinking / bhc frequency (default = 1)
+      year:        2016        # Selected year (for reading netCDF inputs)
+      days_in_yr:  365         # Number of days in repeated period (typically 365 or 366, default = 365)
+      last_day:    3650       # Last day in simulation (~ days_in_yr * no. repeated years, default = 365)
+      cc0:         1.0E-11     # Resilient (minimum) concentration for all variables [mmol/m3] (default = 1.0E-11 mmol/m3)
+#
+#
+##---Vertical diffusivity parameters---------------------------------------------------------------
+      diff_method:     1       # Numerical method to treat vertical diffusion (default = 1):
+                               #   0 for FTCS approach (Forward-Time Central-Space scheme)
+                               #   1 for GOTM approach (semi-implicit in time) using diff_center from GOTM lake (converting input/output units)
+                               #   2 for GOTM approach (semi-implicit in time) using modified version of original GOTM diff_center (no units conversion required, should give very similar results to diff_method = 1)
+                               #   Note: If diff_method>0 and bioturb_across_SWI = 1 below, only one modified GOTM subroutine can be used (diff_center2)
+      cnpar:           0.6     # "Implicitness" parameter for GOTM vertical diffusion (default = 0.6):
+                               #   0 => Forward Euler  (fully explicit, first-order accurate)
+                               #   1 => Backward Euler (fully implicit, first-order accurate)
+                               #   0.5 => Crank-Nicolson (semi-implicit, second-order accurate)
+      dynamic_kz_bbl:  0       # 1 for dynamic (time-dependent) kz_bbl, 0 for static kz_bbl (default = 0)
+                               #   For deep water (e.g. >500 m) a static kz_bbl may be a reasonable approximation.
+                               #   For shallower water, probably better to set dynamic_kz_bbl = 1; kz in the BBL is then determined by linearly interpolating between zero at the SWI and the value at the bottom of the hydrodynamic model input water column
+      kz_bbl_type:     1       # Type of variation of eddy diffusion kz(z) assumed over the benthic boundary layer:
+                               #   0 => constant = kz_bbl_max, 1 => linear (~=> log-layer for velocity, Holtappels & Lorke, 2011)
+                               #   This is only used if assuming a static kz_bbl (dynamic_kz_bbl = 0)
+      kz_bbl_max:      5.E-6   # Maximum eddy diffusivity in the benthic boundary layer [m2/s] (default = 1.0E-5 m2/s)
+                               #   This is only used if assuming a static kz_bbl (dynamic_kz_bbl = 0)
+      dbl_thickness:   0.0002  # Thickness of the diffusive boundary layer [m] (default = 0.0005 m = 0.5 mm)
+                               #   Jorgensen and Revsbech (1985) quote a range 1-2 mm over the deep sea floor (Boudreau and Guinasso, 1982, Wimbush 1976)
+                               #   and down to 0.1-0.2 mm over more exposed sediments (Santschi et al., 1983)
+                               #   All layers within the DBL (midpoint height above SWI < dbl_thickness) have kz = kz_mol0 (no eddy diffusivity)
+      kz_mol0:         1.0E-9  # Molecular diffusivity at infinite dilution [m2/s] (default = 1.0E-9 m2/s)
+                               #   Cf. range (0.5-2.7)E-9 m2/s in Boudreau 1997, Table 4.8
+                               #   This sets a single constant value for all variables that is subsequently corrected for viscosity and tortuosity 
+      mu0_musw:        0.94    # Inverse relative viscosity of saline pore water (default = 0.94 from Boudreau 1997 Table 4.10)
+                               #   This relates the diffusivity in saline pore water to the infinite-dilution diffusivity
+                               #   assuming the approximation from Li and Gregory (1974), see Boudreau (1997) equation 4.107
+      kz_bioturb_max:  1.0E-11 # Maximum diffusivity due to bioturbation in the sediments [m2/s] (default = 1.0E-11 m2/s)
+                               #   Cf. range (1-100) cm2/yr = (0.3-30)E-11 m2/s cited in Soetaert and Middelburg (2009), citing Middelburg et al. (1997) 
+                               #   This sets value for upper z_const_bioturb metres, then bioturbation diffusivity decays with scale z_decay_bioturb.
+      z_const_bioturb: 0.01    # "Mixed layer depth" in sediments over which bioturbation diffusivity = kz_bioturb_max [m] (default = 0.02 m)
+                               #   Cf. values 0.05 m and 0.01 m used by Soetaert and Middelburg (2009) for well-mixed and anoxic conditions respectively
+                               #   Meire et al. (2013) use 0.05 m as a constant value
+      z_decay_bioturb: 0.01    # Decay scale of bioturbation diffusivity below z_const_bioturb [m] (default = 0.01 m, following Soetaert and Middelburg, 2009)
+      K_O2s:           5.0     # Half-saturation constant for the effect of oxygen on bioturbation and bioirrigation [uM] (default = 5.0 uM)
+                               #   Bioturbation diffusivity and bioirrigation rate are modulated by a Michaelis-Menten function with parameter K_O2s
+      bioturb_across_SWI: 1    # 1 to allow (interphase) bioturbation diffusion across the SWI (default = 1)
+                               #   Bioturbation across the SWI must be interphase mixing rather than the intraphase mixing assumed within the sediments
+#
+#
+##---Bioirrigation parameters----------------------------------------------------------------------
+#
+# Bioirrigation rate alpha = a1_bioirr*exp(-a2_bioirr*z_s), where z_s is depth below the SWI [m]
+#
+      a1_bioirr:       0.0     # Maximum rate of bioirrigation in the sediments [s^-1] (default = 0.E-5)
+                               #   Schluter et al. (2000) infer a range (0-5) d^-1 = (0-6)E-5 s^-1 for a1
+                               #   This range is also broadly consistent with the profiles of alpha inferred by Miele et al. (2001)
+      a2_bioirr:       50.     # Decay rate with depth of bioirrigation rate [m^-1] (default = 50)
+                               #   Schluter et al. (2000) infer a range (0-1) cm^1 = (0-100) m^-1 for a2
+                               #   This range is also broadly consistent with the profiles of alpha inferred by Miele et al. (2001)
+#
+#
+##---Sedimentation parameters----------------------------------------------------------------------
+      w_binf:          1.0E-10 # Particulate background burial velocity deep in the sediments where phi = phi_inf [m/s] (default = 1.0E-10 m/s = 0.3 cm/year, but note that true values are highly variable)
+                               #   Soetaert et al. (1996) propose a regression model as a function of water depth:
+                               #   w = 982*D^-1.548, where D is water depth in [m] and w is in cm/year, e.g. for D = 100 m, w = 0.8 cm/year = 2.5E-10 m/s
+                               #   Note: Shallow particulate and solute burial velocities are inferred by assuming steady state compaction (Boudreau, 1997)   
+      dynamic_w_sed:   1       # 1 to enable time-dependent advective velocities in the sediments (default = 0)
+                               #   This uses the modelled (reactive) particulate variables to correct the advective velocities in the sediments (see calculate_sed)
+                               #   w_binf and phi_inf then define constant background components of these velocities
+#
+#
+##---Porosity parameters---------------------------------------------------------------------------
+#
+#   Porosity phi = phi_inf + (phi_0-phi_inf)*exp(-z_s/z_decay_phi), where z_s is depth below the SWI [m]
+#
+      phi_0:           0.95    # Maximum porosity at the SWI (default = 0.95, following Soetaert et al., 1996)
+      phi_inf:         0.80    # Minimum porosity deep in the sediments (default = 0.80, following Soetaert et al., 1996)
+      z_decay_phi:     0.04    # Exponential decay scale for excess porosity in the upper sediments [m] (default = 0.04, following Soetaert et al., 1996)
+      wat_con_0:       0.90    # Water content at the SWI
+      wat_con_inf:     0.50    # Water content deep in the sediments
+#
+#
+##---I/O options-----------------------------------------------------------------------------------
+      input_type: 1                              # input forcing type: 0 for sinusoidal changes, 1 to read from ascii, 2 to read from netCDF (default)
+      ncoutfile_name: BROM_S_out.nc          # netCDF output file name
+      sediments_units_convert: 1                 # 1(default) to convert concentrations from 'mass/total volume' into'mass/pore water ml' for dissolved and 'mass/mass' for solids 
+      outfile_name: finish.dat                   # ascii output file name
+      port_initial_state: 0                      # 0 to use FABM default (default), 1 to read from ascii file (icfile_name)
+      icfile_name: start.dat                     # ascii initial condition file name (needed if port_initial_state = 1)
+#
+#The following are only used if reading input from netCDF (input_type = 2)
+#Note: NetCDF variables (temperature, salinity, diffusivity) must have either two dimensions (depth, time) or four dimensions ((latitude, longitude, depth , time) or (longitude, latitude, depth, time))
+      nc_set_k_wat_bbl: 1                        # 1 (default) to set the no. water column layers to agree with netCDF input
+                                                 # 0 to use the value k_wat_bbl set above by subsampling the netCDF input
+                                                 # Note that in both cases the water layer thickness is determined by the netCDF input, overriding water_layer_thickness above
+      nc_staggered_grid: 1                       # 1 (default) to assume a staggered input grid, (t,s) at layer midpoints, kz on layer interfaces (e.g. ROMS, GOTM)
+      nc_bottom_to_top: 1                        # 1 (default) if netCDF variables are stored with vertical index increasing from bottom to top (e.g. ROMS, GOTM)
+      nc_z_increasing_upward: 1                  # 1 if netCDF depth variables are increasing upward (e.g. if "depth" is negative) (default = 0)
+      ncinfile_name: Lind_03.nc                   # netCDF input file name
+      ncintime_name: time                        # netCDF time dimension name [units since nc_year0-01-01 00:00:00]
+      nc_year0: 1858                             # reference year for netCDF time variable (default = 1970)
+      ncinz_name: z                              # netCDF depth dimension name for layer midpoints (rho points) [m]
+      ncinz2_name: z                            # netCDF depth dimension name for layer interfaces (w points) [m]
+      ncinlat_name: lat                          # netCDF latitude dimension name (needed if reading 4D variables)
+      ncinlon_name: lon                          # netCDF longitude dimension name (needed if reading 4D variables)
+      ncinlat_sel: 1                             # Chosen latitude index (1,2,...,nlat) (needed if reading from 4D variables with nlat > 1)
+      ncinlon_sel: 1                             # Chosen longitude index (1,2,...,nlon) (needed if reading from 4D variables with nlon > 1)
+#
+#Below we specify the names of variables in netCDF input files
+#Format is <BROM internal name>: <netCDF input name>
+#Can also specify a constant scale factor "fac", e.g. to convert units, or correct bias.
+#BROM internal variable = fac * netCDF input variable (BROM assumes fac = 1 if not specified here)
+#This factor can also be used to apply a simple stoichiometric assumption in lieu of nutrient variable data
+#E.g. ncinSis_name: NO3s                         # netCDF input surface silicate variable name [uM] - here using nitrate
+#     ncinSis_fac: 1.5                           # scale factor for netCDF input surface silicate - here assuming "extended Redfield ratio" Si:N = 1.5 mol Si / mol N
+#
+#2D physical variables used for setting BROM forcings
+#These must be arrays of size [no. water column layers (= k_wat_bbl) * no. of days for all available years]
+      ncint_name: temp                           # netCDF input temperature variable name [degC]
+      ncins_name: salinity                           # netCDF input salinity variable name [psu]
+      ncinkz_name: kh                           # netCDF input vertical diffusivity variable name [m2/s]
+      ncinkz_fac: 1.0                            # scale factor for netCDF input vertical diffusivity (default = 1.0)
+#
+#1D physical variables used for setting BROM forcings
+#These must be arrays of size [no. of days for all available years]
+      ncinEair_name: Eair                        # netCDF input shortwave irradiance in air at water surface [W/m2] (only used if use_Eair = 1)
+      ncinEair_fac: 1.0                          # scale factor for netCDF input shortwave irradiance (default = 1.0) (only used if use_Eair = 1)
+      ncinhice_name: hice                        # netCDF input ice thickness variable name [m] (only used if use_hice = 1)
+      ncinhice_fac: 1.0                          # scale factor for netCDF input ice thickness (default = 1.0) (only used if use_hice = 1)
+#
+#Biogeochemical variables used for setting Dirichlet BCs at surface or bottom (bctype = 3)
+#These must be arrays of size [1 * no. of days in repeated period (= days_in_yr)]
+      ncinNH4s_name: NH4s                        # netCDF input surface ammonium variable name [uM]
+      ncinNH4s_fac: 1.0                          # scale factor for netCDF input surface ammonium (default = 1.0)
+      ncinNO3s_name: NO3s                        # netCDF input surface nitrate variable name [uM]
+      ncinNO3s_fac: 1.0                          # scale factor for netCDF input surface nitrate (default = 1.0)
+      ncinPO4s_name: PO4s                        # netCDF input surface phosphate variable name [uM]
+      ncinPO4s_fac: 1.0                          # scale factor for netCDF input surface phosphate (default = 1.0)
+      ncinSis_name: Sis                         # netCDF input surface silicate variable name [uM]
+      ncinSis_fac: 1.0                           # scale factor for netCDF input surface silicate (default = 1.0)
+      ncinAlks_name: ATs                         # netCDF input surface alkalinity variable name [uM]
+      ncinAlks_fac: 1.0                          # scale factor for netCDF input surface alkalinity (default = 1.0)
+#
+#Biogeochemical variables used for setting horizontal mixing fluxes
+#NOTE: These must be arrays of size [no. water column layers (= k_wat_bbl) * no. of days in repeated period (= days_in_yr)]
+#NOTE: The depth indexing must agree with temperature and salinity inputs
+#NOTE: The layer index of the mixing variable is the layer with which it mixes in the internal BROM grid
+#      This is does not necessarily reflect the actual depth of the mixing variable in its external location
+#NOTE: This information is only used if hmix_<variable name> is > 0, see above
+      ncinNH4hmix_name: NH4_N                    # netCDF input horizontal mixing ammonium variable name [uM]
+      ncinNH4hmix_fac: 1.0                       # scale factor for netCDF input horizontal mixing ammonium (default = 1.0)
+      ncinNO3hmix_name: NO3_N                    # netCDF input horizontal mixing nitrate variable name [uM]
+      ncinNO3hmix_fac: 1.0                       # scale factor for netCDF input horizontal mixing nitrate (default = 1.0)
+      ncinPO4hmix_name: PO4_N                    # netCDF input horizontal mixing phosphate variable name [uM]
+      ncinPO4s_fac: 1.0                          # scale factor for netCDF input horizontal mixing phosphate (default = 1.0)
+      ncinSihmix_name: NO3_N                     # netCDF input horizontal mixing silicate variable name [uM]
+      ncinSihmix_fac: 1.5                        # scale factor for netCDF input horizontal mixing silicate (default = 1.0)
+      ncinO2hmix_name: O2_N                      # netCDF input horizontal mixing oxygen variable name [uM]
+      ncinO2hmix_fac: 1.0                        # scale factor for netCDF input horizontal mixing oxygen (default = 1.0)
+#
+#Horizontal mixing rates
+#NOTE: This must be an array of size [no. water column layers (= k_wat_bbl) * no. of days in repeated period (= days_in_yr)]
+#NOTE: The depth indexing must agree with temperature and salinity inputs
+#NOTE: This information is only used if hmix_<variable name> is > 0, see above
+      ncinhmix_rate_name: hmix_rate              # netCDF input horizontal mixing rates [day^-1]
+      ncinhmix_rate_fac: 1.0                     # scale factor for netCDF input horizontal mixing rate (default = 1.0)
+#
+#
+##---Options for run-time output to screen---------------------------------------------------------
+      show_maxmin: 0                             # 1 to show the profile maximum and minimum of each variable at the end of each day (default = 0)
+      show_kztCFL: 0                             # 1/2 to show the max/profile of total vertical diffusivity and associated Courant-Friedrichs-Lewy number at the end of each day (default = 0)
+      show_wCFL: 0                               # 1/2 to show the max/profile of vertical advection and associated Courant-Friedrichs-Lewy number at the end of each day (default = 0)
+      show_nan: 0                                # 1 to show the profile concentration output on NaN-termination for the offending variable (default = 1)
+      show_nan_kztCFL: 2                         # 1/2 to show the max/profile of total vertical diffusivity and associated Courant-Friedrichs-Lewy number on NaN-termination (default = 1)
+      show_nan_wCFL: 1                           # 1/2 to show the max/profile of vertical advection and associated Courant-Friedrichs-Lewy number on NaN-termination (default = 1)
+#
+#
+## References
+# Boudreau B.P., 1997. Diagenetic Models and Their Implementation, Springer-Verlag, Berlin.
+# Holzbecher, E., 2002. Advective flow in sediments under the influence of compaction. Hydrological Sciences 47(4), 641-649.
+# Link JS, Griswold CA, Methratta ET, Gunnard J, Editors. 2006. Documentation for the Energy Modeling and Analysis eXercise (EMAX). US Dep. Commer., Northeast Fish. Sci. Cent. Ref. Doc. 06-15; 166 p.
+# Meire, L., Soetaert, K.E.R., Meysman, F.J.R, 2013. Impact of global change on coastal oxygen dynamics and risk of hypoxia. Biogeosciences 10, 2633–2653.
+# Miele, C., Koretsky, C.M., Cappellen, P.V., 2001. Quantifying bioirrigation in aquatic sediments: An inverse modeling approach. Limnol. Oceanogr. 46(1), 164–177.
+# Mobley, C.D., Boss, E.S., 2012. Improved irradiances for use in ocean heating, primary production, and photo-oxidation calculations. Applied Optics 51(27), 6549-6560.
+# Schluter, M., Sauter, E., Hansen, H., Suess, E., 2000. Seasonal variations of bioirrigation in coastal sediments: Modelling of field data. Geochimica et Cosmochimica Acta 64(5), 821–834.
+# Soetaert, K., Herman, P.M.J., Middelburg, J.J., 1996. A model of early diagenetic processes from the shelf to abyssal depths. Geochimica et Cosmochimica Acta 60(6), 1019-1040.
+# Soetaert, K., Middelburg, J.J., 2009. Modeling eutrophication and oligotrophication of shallow-water marine systems: the importance of sediments under stratified and well-mixed conditions. Hydrobiologia 629:239–254.
+# Wimbush, M., 2012: The Physics of The Benthic Boundary Layer, in The Benthic Boundary Layer, edited by I. McCave.
