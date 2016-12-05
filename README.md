@@ -12,7 +12,7 @@ At first you must download [FABM] and do all prerequisites it needs (you should 
 ## Linux(bash shell):
 1. Download BROM
 
-  `$ git clone https://github.com/e-yakushev/brom-git.git brom-git`
+  `$ git clone https://github.com/BottomRedoxModel/brom-git.git`
 
 2. Add FABMDIR and NetCDF_ROOT environment variables
 
@@ -58,9 +58,9 @@ At first you must download [FABM] and do all prerequisites it needs (you should 
 
   Right-click in Windows Explorer within the directory where you want to place the BROM direcrory, and choose "Git Bash Here". In the terminal that appears type:
 
-  `$ git clone https://github.com/e-yakushev/brom-git.git brom-git`
+  `$ git clone https://github.com/BottomRedoxModel/brom-git.git`
 
-  if using other software, use URL `https://github.com/e-yakushev/brom-git.git` and recommended directory is `..\brom-git`
+  if using other software, use URL `https://github.com/BottomRedoxModel/brom-git.git` and recommended directory is `..\brom-git`
 
 2. Add BROMDIR environment variable
 
