@@ -15,8 +15,8 @@ instances:
       k_min: 1                    # Minimum k number defining the layer that is in contact with the atmosphere (default = 1) 
       k_points_below_water: 0     # Number of levels below the water/BBL boundary (default = 20)
       i_min: 1                    # Minimum i number (default = 1)
-      i_water: 23                  # Number of i for water column (default = 1)       
-      i_max: 23                    # Maximum i number  (default = 1)
+      i_water: 3                  # Number of i for water column (default = 1)       
+      i_max: 3                    # Maximum i number  (default = 1)
 #Note: (i_min,i_water,i_max) should be (1,1,1) for 1D applications
 #
 #
@@ -82,12 +82,14 @@ instances:
 #
 ##---Horizontal transport parameters------------------------------------------------------------------
 #
-#Here we specify horizontal transport (advection) model using htrans_<variable name>
-#     0 to assume no horizontal mixing (default, does not need to be explicitly set)
-#     1 for "box model" mixing model: hmix = hmix_rate*(X_0 - X) with X_0 specified by netCDF input file and hmix_rate specified here
-#     2 for "box model" mixing model: hmix = hmix_rate*(X_0 - X) with X_0 specified by ASCII input file and hmix_rate specified here     
+#     0 to assume no horizontal relaxation (default, does not need to be explicitly set)
+#     1 for relaxation  model: hmix = hmix_rate*(X_0 - X)  
 #
-      htrans_calc: 1
+      h_relax: 1
+#     0 to assume no horizontal mixing (default, does not need to be explicitly set)
+#     1 for "box model" mixing model: hmix = hmix_rate*(X_0 - X) 
+#
+      h_adv: 1
 #
 #
 ##---Horizontal relaxation (side mixing with climatic data) parameters------------------------------------------------------------------
@@ -104,10 +106,10 @@ instances:
 #      hmix_niva_brom_bio_O2: 0
 #      hmix_niva_oxydep_Oxy: 0
       hmix_niva_oxydep_NUT: 2
-      hmix_niva_oxydep_Oxy: 2
+      hmix_niva_oxydep_OXY: 2
       hmix_niva_oxydep_cod_CHON: 2
 #
-      hmix_rate_uniform: 100. # vertically uniform horizontal relaxation, 0 to exclude (default = 0)
+      hmix_rate_uniform: 200000. #17000. #15000. #7500. #10000. # 10. vertically uniform horizontal relaxation, 0 to exclude (default = 0)
 #
 #
 ##---Ice model parameters--------------------------------------------------------------------------

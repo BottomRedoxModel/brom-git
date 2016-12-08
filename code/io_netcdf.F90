@@ -391,7 +391,7 @@
             s_w(i_water,1:k_wat_bbl,iday) = s_temp(inds,istart+iday+1)
             kz_w(i_water,1:k_wat_bbl,iday) = kz_temp(inds,istart+iday+1)
                         kz_w(i_water,k_wat_bbl+1,iday) = 0.
-            u_x_w(i_water,1:k_wat_bbl,iday) = (u_temp(inds,istart+iday+1)*u_temp(inds,istart+iday+1)+v_temp(inds,istart+iday+1)*v_temp(inds,istart+iday+1))**0.5
+            u_x_w(i_water,1:k_wat_bbl,iday) = v_temp(inds,istart+iday+1) !(u_temp(inds,istart+iday+1)*u_temp(inds,istart+iday+1)+v_temp(inds,istart+iday+1)*v_temp(inds,istart+iday+1))**0.5
     enddo
     ! here welinear interpolate data to the period from day 357 to day 15 (to eclude first weeks of tun from new initial conditions)
     do iday=358,365 !Loop over days_in_yr
@@ -418,7 +418,7 @@
         t_w(i,:,:)  =  t_w(1,:,:)
         s_w(i,:,:)  =  s_w(1,:,:)
         kz_w(i,:,:) = min(0.5,kz_w(1,:,:))
-        u_x_w(i,:,:)= min(0.5,u_x_w(1,:,:))
+        u_x_w(i,:,:)= u_x_w(1,:,:)  !convert to m/s from cm/s
     enddo
     
 

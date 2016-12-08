@@ -42,7 +42,7 @@
     real(rk)  :: dt, water_layer_thickness
     integer   :: i_day, year, days_in_yr, freq_turb, freq_sed, last_day   !time related
     integer   :: diff_method, kz_bbl_type, bioturb_across_SWI  !vertical diffusivity related
-    integer   :: htrans_calc  !horizontal transport switch
+    integer   :: h_adv, h_relax  !horizontal transport  (advection and relaxation) switches
     real(rk)  :: K_O2s
     integer   :: input_type, use_Eair, use_hice, port_initial_state !I/O related
     character(len=64) :: icfile_name, outfile_name, ncoutfile_name
@@ -125,7 +125,8 @@
     outfile_name = get_brom_name("outfile_name")
     ncoutfile_name = get_brom_name("ncoutfile_name")
     K_O2s = get_brom_par("K_O2s")
-    htrans_calc =  get_brom_par("htrans_calc")
+    h_adv =  get_brom_par("h_adv")
+    h_relax =  get_brom_par("h_relax")
 
     !Initialize FABM model from fabm.yaml
     call fabm_create_model_from_yaml_file(model)
@@ -239,7 +240,7 @@
         !Note: This uses the netCDF file to set z_w = layer midpoints, dz_w = increments between layer midpoints, hz_w = layer thicknesses
     end if
 
-    if (htrans_calc.eq.1) then
+    if (h_adv.eq.1) then
         call input_netcdf_htrans(z_w, dz_w, hz_w, t_w, s_w, kz_w, hmix_rate_w, Eair, use_Eair, hice, use_hice, year, i_water, i_max, &
         days_in_yr, k_wat_bbl, par_name, par_max, bctype_top, bctype_bottom, cc_top, cc_bottom, hmixtype, cc_hmix_w, u_x_w)
     endif
@@ -258,7 +259,6 @@
     allocate(t(i_max,k_max,days_in_yr))
     allocate(s(i_max,k_max,days_in_yr))
     allocate(kz(i_max,k_max+1,days_in_yr))
-!    allocate(u_x_w(i_max,k_max+1,days_in_yr))
     allocate(hmix_rate(i_max,k_max,days_in_yr))
     allocate(cc_hmix(i_max,par_max,k_max,days_in_yr))
     allocate(kz_mol(i_max,k_max+1,par_max))
@@ -311,8 +311,8 @@
     endif
 
     !Specify horizontal transport
-    if (htrans_calc.eq.1) then
-            dx(:)=50.0_rk        !horizontal resolution in m
+    if (h_adv.eq.1) then
+            dx(:)=500.0_rk        !horizontal resolution in m
             x(1)=0.0_rk
 !            u_x_w(:,:,:)=0.02  !horizontal velocity in m/s if not read from forcing file...
         do i=2,i_max
@@ -406,6 +406,7 @@
 
 
     !Complete hydrophysical forcings
+    cc_hmix=0.0_rk
     do i=i_min,i_water
       call make_physics_bbl_sed(t, s, kz, hmix_rate, cc_hmix, t_w, s_w, kz_w, hmix_rate_w, cc_hmix_w, kz_mol, kz_bio, &
         z, dz, hz, i_min, i_max, i, k_wat_bbl, k_bbl_sed, k_max, par_max, days_in_yr, alpha, is_solid, phi, phi1, phi_inv, &
@@ -480,8 +481,8 @@
     model_year = 0
     kzti = 0.0_rk
 
-    !Read ascii data for horizontal relaxation
-
+    !Read ascii data for horizontal relaxation (OxyDep)
+    cc_hmix=0.0_rk
     open(20, file='spa_no3.dat')
     do k=1,k_wat_bbl
         do i_day=1,days_in_yr
@@ -638,38 +639,62 @@
           enddo
 
 !________Horizontal relaxation_________!
-            dcc = 0.0_rk
-          do i=i_min, i_water
+    if (h_relax.eq.1) then          
+        dcc = 0.0_rk
+        do i=i_min, i_water
             do ip=1,par_max
-                if (hmixtype(i,ip).gt.0) then
+                if  (hmixtype(i,ip).ge.1) then
                     !Calculate tendency dcc (water column only)
-                    if (hmixtype(i,ip).ge.1) dcc(i,:,ip) = hmix_rate(i,:,julianday)*(cc_hmix(i,ip,:,julianday)-cc(i,:,ip))
+                    dcc(i,:,ip) = hmix_rate(i,:,julianday)*2.0_rk*(cc_hmix(i,ip,:,julianday)-cc(i,:,ip))/dx(i)/dx(i)
                     !Update concentration (water column only)
                     cc(i,:,ip) = cc(i,:,ip) + dt*dcc(i,:,ip) !Simple Euler time step
                     if (bctype_top(i,ip).gt.0) cc(i,1,ip) = bc_top(i,ip) !Reassert Dirichlet BC if required
-                    cc(i,:,ip) = max(cc0, cc(i,:,ip)) !Impose resilient concentration
+                        cc(i,:,ip) = max(cc0, cc(i,:,ip)) !Impose resilient concentration
                 end if
             end do
-          enddo
+        enddo
+    endif      
+!________Horizontal turbulence_________!
+            dcc = 0.0_rk
+          do ip=1,par_max
+            do i=i_min+1, i_water-1
+                if (hmixtype(i,ip).ge.1) then
+                    !Calculate tendency dcc (water column only)
+                    dcc(i,:,ip) = hmix_rate(i,:,julianday)*(cc(i+1,:,ip)+cc(i-1,:,ip)-2.0_rk*cc(i,:,ip))/dx(i)/dx(i)
+                end if
+            end do    
+            dcc(1,:,ip) = hmix_rate(1,:,julianday)*(cc(2,:,ip)+cc(i_water,:,ip)-2.0_rk*cc(1,:,ip))/dx(1)/dx(1)
+            dcc(i_water,:,ip) = hmix_rate(i_water,:,julianday)*(cc(1,:,ip)+cc(i_water-1,:,ip)-2.0_rk*cc(i_water,:,ip))/dx(i_water)/dx(i_water)
+            do i=i_min, i_water
+                    cc(i,:,ip) = cc(i,:,ip) + dt*dcc(i,:,ip) !Simple Euler time step
+                    if (bctype_top(i,ip).gt.0) cc(i,1,ip) = bc_top(i,ip) !Reassert Dirichlet BC if required
+                    cc(i,:,ip) = max(cc0, cc(i,:,ip)) !Impose resilient concentration
+            enddo        
+          enddo          
 
 !________Horizontal transport_________!
-    if (htrans_calc.eq.1) then
-            dcc = 0.0_rk
-         do i=i_min, i_water
-           do ip=1,par_max
+    if (h_adv.eq.1) then
+        dcc = 0.0_rk
+        do i=i_min, i_water
+            do ip=1,par_max
                 if(i.eq.i_min) then
-                    dcc(i,:,ip) = 0.25*u_x_w(i,:,julianday)*(cc(i_water,:,ip)-cc(i,:,ip))/dx(i)
-                else
-                    dcc(i,:,ip) = 0.25*u_x_w(i,:,julianday)*(cc(i-1,:,ip)-cc(i,:,ip))/dx(i)
+                    dcc(i,:,ip) = max(0.0_rk,u_x_w(i,:,julianday))*(cc(i_water,:,ip)-cc(i,:,ip))/dx(i)+ max(0.0_rk,-u_x_w(i,:,julianday))*(cc(i+1,:,ip)-cc(i,:,ip))/dx(i)
+                else  if(i.eq.i_water) then
+                    dcc(i,:,ip) = max(0.0_rk,u_x_w(i,:,julianday))*(cc(i-1,:,ip)-cc(i,:,ip))/dx(i)+ max(0.0_rk,-u_x_w(i,:,julianday))*(cc(i_min,:,ip)-cc(i,:,ip))/dx(i)
+                else                      
+                    dcc(i,:,ip) = max(0.0_rk,u_x_w(i,:,julianday))*(cc(i-1,:,ip)-cc(i,:,ip))/dx(i) + max(0.0_rk,-u_x_w(i,:,julianday))*(cc(i+1,:,ip)-cc(i,:,ip))/dx(i)
                 endif
                 !Update concentration (water column only)
-                    cc(i,:,ip) = cc(i,:,ip) + 86400.*dt*dcc(i,:,ip) !Simple Euler time step
-           enddo
+                cc(i,:,ip) = cc(i,:,ip) + 86400.*dt*dcc(i,:,ip) !Simple Euler time step
+            enddo
         enddo
     endif
 !________Injection____________________!
-!            cc(2,20,7)=cc(2,20,7)+dt*100.   !Source of "acetate" 1292 mmol/sec, should be devided to the volume of the grid cell, i.e. dz(k)*dx(i)*dx(i)
-            cc(2,20,7)=cc(2,20,7)+86400.0_rk*dt*1292./(dx(2)*dx(2)*dz(20)) 
+!            !Source of "acetate" 1292 mmol/sec, should be devided to the volume of the grid cell, i.e. dz(k)*dx(i)*dx(i)
+!            cc(6,20,7)=cc(6,20,7)+0.5_rk*86400.0_rk*dt*1292._rk/(dx(6)*dx(6)*dz(20))     
+!            cc(6,21,7)=cc(6,21,7)+0.5_rk*86400.0_rk*dt*1292._rk/(dx(6)*dx(6)*dz(20))   
+
+            cc(1,21,7)=cc(1,21,7)+86400.0_rk*dt*1292._rk/(dx(1)*dx(1)*dz(21))       
             !Check for NaNs (stopping if any found)
             do ip=1,par_max
               do i=i_min,i_water
