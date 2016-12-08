@@ -89,7 +89,8 @@ instances:
 #     0 to assume no horizontal mixing (default, does not need to be explicitly set)
 #     1 for "box model" mixing model: hmix = hmix_rate*(X_0 - X) 
 #
-      h_adv: 1
+      h_adv: 1 
+      dx_adv : 500.
 
 #     0 to assume no horizontal turbulence (default, does not need to be explicitly set)
 #     1 for implementing horizontal turbulence 

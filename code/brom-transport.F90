@@ -46,6 +46,7 @@
     real(rk)  :: K_O2s
     integer   :: input_type, use_Eair, use_hice, port_initial_state !I/O related
     character(len=64) :: icfile_name, outfile_name, ncoutfile_name
+    character :: hmix_file
     integer   :: k_bbl_sed, k_max          !z-axis related
     integer   :: par_max                   !no. BROM variables
 
@@ -79,7 +80,7 @@
     character(len=attribute_length), allocatable, dimension(:)    :: par_name
 
     !Constant forcings that can be read as parameters from brom.yaml
-    real(rk) :: wind_speed, pco2_atm, mu0_musw, dphidz_SWI
+    real(rk) :: wind_speed, pco2_atm, mu0_musw, dphidz_SWI , dx_adv
     real(rk), allocatable, dimension(:)        :: rho
 
     !Counters
@@ -128,6 +129,7 @@
     h_adv =  get_brom_par("h_adv")
     h_relax =  get_brom_par("h_relax")
     h_turb =  get_brom_par("h_turb")
+    dx_adv = get_brom_par("dx_adv")
     !Initialize FABM model from fabm.yaml
     call fabm_create_model_from_yaml_file(model)
     par_max = size(model%state_variables)
@@ -198,18 +200,49 @@
     end do
     write(*,*) "All other boundary conditions use surface and bottom fluxes from FABM"
 
-
+    !!if (h_relax.eq.1) then
+    !!    !if         
+    !!    cc_hmix=0.0_rk
+    !!    open(20, file='spa_no3.dat')
+    !!    do k=1,k_wat_bbl
+    !!        do i_day=1,days_in_yr
+    !!            read(20, *) ip,ip,cc_hmix(i_water,3,k,i_day) ! NODC data on NO3 (i_max,par_max,k_max,days_in_yr))
+    !!        end do
+    !!    end do
+    !!    close(20)
+    !!    open(20, file='spa_o2.dat')
+    !!    do k=1,k_wat_bbl
+    !!        do i_day=1,days_in_yr
+    !!            read(20, *) ip,ip,cc_hmix(i_water,1,k,i_day) ! NODC data on O2 i(i_max,par_max,k_max,days_in_yr))
+    !!        end do
+    !!    end do
+    !!    close(20)
+    !!    do i=i_min,i_water
+    !!        cc_hmix(i,:,:,:)=cc_hmix(i_water,:,:,:)
+    !!    enddo
+    !!endif  
+    
     !Get horizontal relaxation parameters from brom.yaml:
     !hmixtype = 0, 1 or 2  for no horizontal relaxation (default), box model mixing respectively
     do ip=1,par_max
         hmixtype(i_water,ip) = get_brom_par('hmix_' // trim(par_name(ip)),0.0_rk)
+        
         if (hmixtype(i_water,ip).eq.1) then
-            write(*,*) "Box-model horizontal mixing assumed for " // trim(par_name(ip))
+            write(*,*) "Box-model horizontal mixing assumed for " // trim(par_name(ip))            
         end if
         if (hmixtype(i_water,ip).eq.2) then
+           ! hmix_file = get_brom_name('hmixNUTf')
             write(*,*) "Box-model horizontal mixing (ASCII) assumed for " // trim(par_name(ip))
+        !    cc_hmix=0.0_rk
+!            open(20, file= 'spa_no3.dat ')!'' // hmix_file
+        !    do k=1,k_wat_bbl
+        !        do i_day=1,days_in_yr
+        !            read(20, *) ip,ip,cc_hmix(i_water,ip,k,i_day) ! NODC data on NO3 (i_max,par_max,k_max,days_in_yr))
+        !        end do
+!            end do 
+            !close(20)
         end if
-            hmixtype(:,ip)=hmixtype(i_water,ip)
+            !hmixtype(:,ip)=hmixtype(i_water,ip)
     end do
 
     !Input forcing data
@@ -312,7 +345,7 @@
 
     !Specify horizontal transport
     if (h_adv.eq.1) then
-            dx(:)=500.0_rk        !horizontal resolution in m
+            dx(:)= dx_adv !500.0_rk        !horizontal resolution in m
             x(1)=0.0_rk
 !            u_x_w(:,:,:)=0.02  !horizontal velocity in m/s if not read from forcing file...
         do i=2,i_max
@@ -481,33 +514,17 @@
     model_year = 0
     kzti = 0.0_rk
 
-    !Read ascii data for horizontal relaxation (OxyDep)
-    cc_hmix=0.0_rk
-    open(20, file='spa_no3.dat')
-    do k=1,k_wat_bbl
-        do i_day=1,days_in_yr
-            read(20, *) ip,ip,cc_hmix(i_water,3,k,i_day) ! NODC data on NO3 (i_max,par_max,k_max,days_in_yr))
-        end do
-    end do
-    close(20)
-    open(20, file='spa_o2.dat')
-    do k=1,k_wat_bbl
-        do i_day=1,days_in_yr
-            read(20, *) ip,ip,cc_hmix(i_water,1,k,i_day) ! NODC data on O2 i(i_max,par_max,k_max,days_in_yr))
-        end do
-    end do
-    close(20)
-    do i=i_min,i_water
-        cc_hmix(i,:,:,:)=cc_hmix(i_water,:,:,:)
-    enddo
-    !convert bottom boundary values from 'mass/pore water ml' for dissolved and 'mass/mass' for solids into 'mass/total volume'
+
+  
+        !convert bottom boundary values from 'mass/pore water ml' for dissolved and 'mass/mass' for solids into 'mass/total volume'
     if (bc_units_convert.eq.1) then
-      do i=i_min,i_water
-        do ip=1,par_max
-            if (bctype_bottom(i,ip).eq.1) bc_bottom(i,ip) = bc_bottom(i,ip)/pF1(i,k_max,ip)
-        enddo
-      enddo
-    endif
+        do i=i_min,i_water
+            do ip=1,par_max
+                if (bctype_bottom(i,ip).eq.1) bc_bottom(i,ip) = bc_bottom(i,ip)/pF1(i,k_max,ip)
+            enddo
+          enddo    
+    end if
+    
     !Uniform horizontal relaxation if prescribed
     if(hmix_rate_uniform>0.0_rk)    hmix_rate=hmix_rate_uniform
 
@@ -679,11 +696,14 @@
         do i=i_min, i_water
             do ip=1,par_max
                 if(i.eq.i_min) then
-                    dcc(i,:,ip) = max(0.0_rk,u_x_w(i,:,julianday))*(cc(i_water,:,ip)-cc(i,:,ip))/dx(i)+ max(0.0_rk,-u_x_w(i,:,julianday))*(cc(i+1,:,ip)-cc(i,:,ip))/dx(i)
+                    dcc(i,:,ip) = max(0.0_rk,u_x_w(i,:,julianday))*(cc(i_water,:,ip)-cc(i,:,ip))/dx(i)+ &
+                        max(0.0_rk,-u_x_w(i,:,julianday))*(cc(i+1,:,ip)-cc(i,:,ip))/dx(i)
                 else  if(i.eq.i_water) then
-                    dcc(i,:,ip) = max(0.0_rk,u_x_w(i,:,julianday))*(cc(i-1,:,ip)-cc(i,:,ip))/dx(i)+ max(0.0_rk,-u_x_w(i,:,julianday))*(cc(i_min,:,ip)-cc(i,:,ip))/dx(i)
+                    dcc(i,:,ip) = max(0.0_rk,u_x_w(i,:,julianday))*(cc(i-1,:,ip)-cc(i,:,ip))/dx(i)+  &
+                        max(0.0_rk,-u_x_w(i,:,julianday))*(cc(i_min,:,ip)-cc(i,:,ip))/dx(i)
                 else                      
-                    dcc(i,:,ip) = max(0.0_rk,u_x_w(i,:,julianday))*(cc(i-1,:,ip)-cc(i,:,ip))/dx(i) + max(0.0_rk,-u_x_w(i,:,julianday))*(cc(i+1,:,ip)-cc(i,:,ip))/dx(i)
+                    dcc(i,:,ip) = max(0.0_rk,u_x_w(i,:,julianday))*(cc(i-1,:,ip)-cc(i,:,ip))/dx(i) + &
+                        max(0.0_rk,-u_x_w(i,:,julianday))*(cc(i+1,:,ip)-cc(i,:,ip))/dx(i)
                 endif
                 !Update concentration (water column only)
                 cc(i,:,ip) = cc(i,:,ip) + 86400.*dt*dcc(i,:,ip) !Simple Euler time step
