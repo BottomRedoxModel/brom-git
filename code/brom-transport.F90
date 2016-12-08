@@ -42,7 +42,7 @@
     real(rk)  :: dt, water_layer_thickness
     integer   :: i_day, year, days_in_yr, freq_turb, freq_sed, last_day   !time related
     integer   :: diff_method, kz_bbl_type, bioturb_across_SWI  !vertical diffusivity related
-    integer   :: h_adv, h_relax  !horizontal transport  (advection and relaxation) switches
+    integer   :: h_adv, h_relax,h_turb  !horizontal transport  (advection and relaxation) switches
     real(rk)  :: K_O2s
     integer   :: input_type, use_Eair, use_hice, port_initial_state !I/O related
     character(len=64) :: icfile_name, outfile_name, ncoutfile_name
@@ -127,7 +127,7 @@
     K_O2s = get_brom_par("K_O2s")
     h_adv =  get_brom_par("h_adv")
     h_relax =  get_brom_par("h_relax")
-
+    h_turb =  get_brom_par("h_turb")
     !Initialize FABM model from fabm.yaml
     call fabm_create_model_from_yaml_file(model)
     par_max = size(model%state_variables)
@@ -655,8 +655,9 @@
         enddo
     endif      
 !________Horizontal turbulence_________!
-            dcc = 0.0_rk
-          do ip=1,par_max
+    if (h_turb.eq.1) then
+        dcc = 0.0_rk
+        do ip=1,par_max
             do i=i_min+1, i_water-1
                 if (hmixtype(i,ip).ge.1) then
                     !Calculate tendency dcc (water column only)
@@ -671,7 +672,7 @@
                     cc(i,:,ip) = max(cc0, cc(i,:,ip)) !Impose resilient concentration
             enddo        
           enddo          
-
+    end if
 !________Horizontal transport_________!
     if (h_adv.eq.1) then
         dcc = 0.0_rk

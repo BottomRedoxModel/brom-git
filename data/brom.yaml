@@ -90,6 +90,10 @@ instances:
 #     1 for "box model" mixing model: hmix = hmix_rate*(X_0 - X) 
 #
       h_adv: 1
+
+#     0 to assume no horizontal turbulence (default, does not need to be explicitly set)
+#     1 for implementing horizontal turbulence 
+      h_turb: 1
 #
 #
 ##---Horizontal relaxation (side mixing with climatic data) parameters------------------------------------------------------------------
