@@ -82,19 +82,18 @@ instances:
 #
 ##---Horizontal transport parameters------------------------------------------------------------------
 #
-#     0 to assume no horizontal relaxation (default, does not need to be explicitly set)
-#     1 for relaxation  model: hmix = hmix_rate*(X_0 - X)  
-#
-      h_relax: 1
-#     0 to assume no horizontal mixing (default, does not need to be explicitly set)
-#     1 for "box model" mixing model: hmix = hmix_rate*(X_0 - X) 
-#
-      h_adv: 1 
-      dx_adv : 500.
 
+#     0 to assume no horizontal advection  (default, does not need to be explicitly set)
+#     1 for horizontal advection 
+      h_adv: 1 
 #     0 to assume no horizontal turbulence (default, does not need to be explicitly set)
 #     1 for implementing horizontal turbulence 
       h_turb: 1
+#     0 to assume no horizontal relaxation (default, does not need to be explicitly set)
+#     1 for relaxation  model: hmix = hmix_rate*(X_0 - X)  
+      h_relax: 1
+#     horizontal resolution (m) in case of constant value 
+      dx_adv : 500.
 #
 #
 ##---Horizontal relaxation (side mixing with climatic data) parameters------------------------------------------------------------------
@@ -110,12 +109,14 @@ instances:
 #      hmix_niva_brom_redox_Si: 0
 #      hmix_niva_brom_bio_O2: 0
 #      hmix_niva_oxydep_Oxy: 0
+      hmix_niva_oxydep_Oxy: 2
+      hmix_filename_Oxy : spa_o2.dat
       hmix_niva_oxydep_NUT: 2
-#  hmix_filename_NUT : spa_no3.dat
-      hmix_niva_oxydep_OXY: 2
+      hmix_filename_NUT : spa_no3.dat
       hmix_niva_oxydep_cod_CHON: 2
+      hmix_filename_cod_CHON : spa_chon.dat
 #
-      hmix_rate_uniform: 200000. #17000. #15000. #7500. #10000. # 10. vertically uniform horizontal relaxation, 0 to exclude (default = 0)
+      hmix_rate_uniform: 200000. # vertically uniform horizontal relaxation (and horizontal turbulence), 0 to exclude (default = 0)
 #
 #
 ##---Ice model parameters--------------------------------------------------------------------------

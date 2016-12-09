@@ -84,7 +84,7 @@
     real(rk), allocatable, dimension(:)        :: rho
 
     !Counters
-    integer   :: i, k, ip, ip_sol, ip_par
+    integer   :: i, k, ip, ip_sol, ip_par, i_dummy
 
 
     contains
@@ -201,28 +201,7 @@
     write(*,*) "All other boundary conditions use surface and bottom fluxes from FABM"
 
 
-    !Get horizontal relaxation parameters from brom.yaml:
-    !hmixtype = 0, 1 or 2  for no horizontal relaxation (default), box model mixing respectively
-    do ip=1,par_max
-        hmixtype(i_water,ip) = get_brom_par('hmix_' // trim(par_name(ip)),0.0_rk)
-        
-        if (hmixtype(i_water,ip).eq.1) then
-            write(*,*) "Box-model horizontal mixing assumed for " // trim(par_name(ip))            
-        end if
-        if (hmixtype(i_water,ip).eq.2) then
-           ! hmix_file = get_brom_name('hmixNUTf')
-            write(*,*) "Box-model horizontal mixing (ASCII) assumed for " // trim(par_name(ip))
-        !    cc_hmix=0.0_rk
-!            open(20, file= 'spa_no3.dat ')!'' // hmix_file
-        !    do k=1,k_wat_bbl
-        !        do i_day=1,days_in_yr
-        !            read(20, *) ip,ip,cc_hmix(i_water,ip,k,i_day) ! NODC data on NO3 (i_max,par_max,k_max,days_in_yr))
-        !        end do
-!            end do 
-            !close(20)
-        end if
-            !hmixtype(:,ip)=hmixtype(i_water,ip)
-    end do
+
 
     !Input forcing data
     if (input_type.eq.0) then !Input sinusoidal seasonal changes (hypothetical)
@@ -321,6 +300,8 @@
         k_sed = (/(k,k=k_bbl_sed+1,k_max)/) !Index vector for all points in the sediments
         k_sed1 = (/(k,k=k_bbl_sed+1,k_max+1)/) !Indices of layer interfaces in the sediments (including the SWI)
     endif
+
+    
 
     !Specify horizontal transport
     if (h_adv.eq.1) then
@@ -433,7 +414,34 @@
     
     write(*,*) "Made physics of BBL, sediments"
 
-
+    if(h_relax.eq.1) then   
+    !Get horizontal relaxation parameters from brom.yaml:
+    !hmixtype = 0, 1 or 2  for no horizontal relaxation (default), box model mixing respectively
+                cc_hmix=0.0_rk
+        do ip=1,par_max
+            hmixtype(i_water,ip) = get_brom_par('hmix_' // trim(par_name(ip)),0.0_rk)
+        
+            if (hmixtype(i_water,ip).eq.1) then
+                write(*,*) "Box-model horizontal mixing assumed for " // trim(par_name(ip))            
+            end if
+            if (hmixtype(i_water,ip).eq.2) then
+    !            hmix_file = get_brom_name("hmix_filename_" // trim(par_name(ip)(13:))) !niva_oxydep_NUT
+                write(*,*) "Box-model horizontal mixing (ASCII) assumed for " // trim(par_name(ip))
+                open(20, file= get_brom_name("hmix_filename_" // trim(par_name(ip)(13:))))!'' // hmix_file
+                do k=1,k_wat_bbl
+                    do i_day=1,days_in_yr
+                        read(20, *) i_dummy,i_dummy,cc_hmix(i_water,ip,k,i_day) ! NODC data on NO3 (i_max,par_max,k_max,days_in_yr))
+                    end do
+                end do 
+                close(20)
+                do i=i_min,i_water
+                    cc_hmix(i,:,:,:)=cc_hmix(i_water,:,:,:)
+                enddo
+            end if
+                !hmixtype(:,ip)=hmixtype(i_water,ip)
+        end do
+    endif
+    
     !Set constant forcings
     wind_speed = get_brom_par("wind_speed")    ! 10m wind speed [m s-1]
     pco2_atm   = get_brom_par("pco2_atm")      ! CO2 partical pressure [ppm]
@@ -493,26 +501,26 @@
     model_year = 0
     kzti = 0.0_rk
 
-    if (h_relax.eq.1) then
-        cc_hmix=0.0_rk
-        open(20, file='spa_no3.dat')
-        do k=1,k_wat_bbl
-            do i_day=1,days_in_yr
-                read(20, *) ip,ip,cc_hmix(i_water,3,k,i_day) ! NODC data on NO3 (i_max,par_max,k_max,days_in_yr))
-            end do
-        end do
-        close(20)
-        open(20, file='spa_o2.dat')
-        do k=1,k_wat_bbl
-            do i_day=1,days_in_yr
-                read(20, *) ip,ip,cc_hmix(i_water,1,k,i_day) ! NODC data on O2 i(i_max,par_max,k_max,days_in_yr))
-            end do
-        end do
-        close(20)
-        do i=i_min,i_water
-            cc_hmix(i,:,:,:)=cc_hmix(i_water,:,:,:)
-        enddo
-    endif  
+    !!!!if (h_relax.eq.1) then
+    !!!!    cc_hmix=0.0_rk
+    !!!!    open(20, file='spa_no3.dat')
+    !!!!    do k=1,k_wat_bbl
+    !!!!        do i_day=1,days_in_yr
+    !!!!            read(20, *) ip,ip,cc_hmix(i_water,3,k,i_day) ! NODC data on NO3 (i_max,par_max,k_max,days_in_yr))
+    !!!!        end do
+    !!!!    end do
+    !!!!    close(20)
+    !!!!    open(20, file='spa_o2.dat')
+    !!!!    do k=1,k_wat_bbl
+    !!!!        do i_day=1,days_in_yr
+    !!!!            read(20, *) ip,ip,cc_hmix(i_water,1,k,i_day) ! NODC data on O2 i(i_max,par_max,k_max,days_in_yr))
+    !!!!        end do
+    !!!!    end do
+    !!!!    close(20)
+    !!!!    do i=i_min,i_water
+    !!!!        cc_hmix(i,:,:,:)=cc_hmix(i_water,:,:,:)
+    !!!!    enddo
+    !!!!endif  
     
   
         !convert bottom boundary values from 'mass/pore water ml' for dissolved and 'mass/mass' for solids into 'mass/total volume'
