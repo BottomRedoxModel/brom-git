@@ -274,6 +274,7 @@ instances:
 #
 #The following are only used if reading input from netCDF (input_type = 2)
 #Note: NetCDF variables (temperature, salinity, diffusivity) must have either two dimensions (depth, time) or four dimensions ((latitude, longitude, depth , time) or (longitude, latitude, depth, time))
+      nc_file_source: 3                          #  1 for ROMS netCDF output; 2 for GETM netCDF output; 3 for FVCOM netCDF output
       nc_set_k_wat_bbl: 1                        # 1 (default) to set the no. water column layers to agree with netCDF input
                                                  # 0 to use the value k_wat_bbl set above by subsampling the netCDF input
                                                  # Note that in both cases the water layer thickness is determined by the netCDF input, overriding water_layer_thickness above

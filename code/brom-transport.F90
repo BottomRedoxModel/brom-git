@@ -42,7 +42,7 @@
     real(rk)  :: dt, water_layer_thickness
     integer   :: i_day, year, days_in_yr, freq_turb, freq_sed, last_day   !time related
     integer   :: diff_method, kz_bbl_type, bioturb_across_SWI  !vertical diffusivity related
-    integer   :: h_adv, h_relax,h_turb  !horizontal transport  (advection and relaxation) switches
+    integer   :: h_adv, h_relax, h_turb  !horizontal transport  (advection and relaxation) switches
     real(rk)  :: K_O2s
     integer   :: input_type, use_Eair, use_hice, port_initial_state !I/O related
     character(len=64) :: icfile_name, outfile_name, ncoutfile_name
@@ -232,8 +232,8 @@
     end if
 
     if (h_adv.eq.1) then
-        call input_netcdf_htrans(z_w, dz_w, hz_w, t_w, s_w, kz_w, hmix_rate_w, Eair, use_Eair, hice, use_hice, year, i_water, i_max, &
-        days_in_yr, k_wat_bbl, par_name, par_max, bctype_top, bctype_bottom, cc_top, cc_bottom, hmixtype, cc_hmix_w, u_x_w)
+        call input_netcdf(z_w, dz_w, hz_w, t_w, s_w, kz_w, hmix_rate_w, Eair, use_Eair, hice, use_hice, year, i_water, i_max, &
+        days_in_yr, k_wat_bbl, par_name, par_max, bctype_top, bctype_bottom, cc_top, cc_bottom, hmixtype, cc_hmix_w, h_adv, u_x_w)
     endif
 
         !Determine total number of vertical grid points (layers) now that k_wat_bbl is determined
