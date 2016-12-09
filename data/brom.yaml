@@ -111,6 +111,7 @@ instances:
 #      hmix_niva_brom_bio_O2: 0
 #      hmix_niva_oxydep_Oxy: 0
       hmix_niva_oxydep_NUT: 2
+#  hmix_filename_NUT : spa_no3.dat
       hmix_niva_oxydep_OXY: 2
       hmix_niva_oxydep_cod_CHON: 2
 #

@@ -200,28 +200,7 @@
     end do
     write(*,*) "All other boundary conditions use surface and bottom fluxes from FABM"
 
-    !!if (h_relax.eq.1) then
-    !!    !if         
-    !!    cc_hmix=0.0_rk
-    !!    open(20, file='spa_no3.dat')
-    !!    do k=1,k_wat_bbl
-    !!        do i_day=1,days_in_yr
-    !!            read(20, *) ip,ip,cc_hmix(i_water,3,k,i_day) ! NODC data on NO3 (i_max,par_max,k_max,days_in_yr))
-    !!        end do
-    !!    end do
-    !!    close(20)
-    !!    open(20, file='spa_o2.dat')
-    !!    do k=1,k_wat_bbl
-    !!        do i_day=1,days_in_yr
-    !!            read(20, *) ip,ip,cc_hmix(i_water,1,k,i_day) ! NODC data on O2 i(i_max,par_max,k_max,days_in_yr))
-    !!        end do
-    !!    end do
-    !!    close(20)
-    !!    do i=i_min,i_water
-    !!        cc_hmix(i,:,:,:)=cc_hmix(i_water,:,:,:)
-    !!    enddo
-    !!endif  
-    
+
     !Get horizontal relaxation parameters from brom.yaml:
     !hmixtype = 0, 1 or 2  for no horizontal relaxation (default), box model mixing respectively
     do ip=1,par_max
@@ -514,7 +493,27 @@
     model_year = 0
     kzti = 0.0_rk
 
-
+    if (h_relax.eq.1) then
+        cc_hmix=0.0_rk
+        open(20, file='spa_no3.dat')
+        do k=1,k_wat_bbl
+            do i_day=1,days_in_yr
+                read(20, *) ip,ip,cc_hmix(i_water,3,k,i_day) ! NODC data on NO3 (i_max,par_max,k_max,days_in_yr))
+            end do
+        end do
+        close(20)
+        open(20, file='spa_o2.dat')
+        do k=1,k_wat_bbl
+            do i_day=1,days_in_yr
+                read(20, *) ip,ip,cc_hmix(i_water,1,k,i_day) ! NODC data on O2 i(i_max,par_max,k_max,days_in_yr))
+            end do
+        end do
+        close(20)
+        do i=i_min,i_water
+            cc_hmix(i,:,:,:)=cc_hmix(i_water,:,:,:)
+        enddo
+    endif  
+    
   
         !convert bottom boundary values from 'mass/pore water ml' for dissolved and 'mass/mass' for solids into 'mass/total volume'
     if (bc_units_convert.eq.1) then
