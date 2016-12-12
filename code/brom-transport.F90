@@ -382,6 +382,9 @@
     !Establish which variables will be treated as solid phase in the sediments, based on the biological velocity (sinking/floating) from FABM.
     wbio = 0.0_rk
     call fabm_get_vertical_movement(model, i_water, i_water, k_wat_bbl, wbio(i_water:i_water,k_wat_bbl,:))
+    do i=i_min,i_water
+        wbio(i,:,:)=wbio(i_water,:,:)
+    enddo
     wbio = -1.0_rk * wbio !FABM returns NEGATIVE wbio for sinking; sign change here means that wbio is POSITIVE for sinking
     is_solid = 0
     ip_sol = 0
@@ -422,7 +425,7 @@
                 cc_hmix=0.0_rk
         do ip=1,par_max
             hmixtype(i_water,ip) = get_brom_par('hmix_' // trim(par_name(ip)),0.0_rk)
-                hmixtype(:,ip)=hmixtype(i_water,ip)        
+            hmixtype(:,ip)=hmixtype(i_water,ip)        
             if (hmixtype(i_water,ip).eq.1) then
                 write(*,*) "Horizontal relaxation assumed for " // trim(par_name(ip))            
             end if
@@ -631,7 +634,7 @@
             if (bott_flux_with_diff.eq.0) then
                 bott_flux = 0.0_rk
                 call fabm_do_bottom(model, i, i, bott_flux(i:i,:),bott_source(i:i,:))
-                fick(i,k_max+1,:) = bott_flux(i,:)
+                sink(i,k_max+1,:) = bott_flux(i,:)
                 do ip=1,par_max
                     dcc(i,k_max,ip) = dcc(i,k_max,ip) + bott_flux(i,ip) / hz(k_max)
                 end do
@@ -736,9 +739,9 @@
 !________Injection____________________!
 !            !Source of "acetate" 1292 mmol/sec, should be devided to the volume of the grid cell, i.e. dz(k)*dx(i)*dx(i)
 !            cc(6,20,7)=cc(6,20,7)+0.5_rk*86400.0_rk*dt*1292._rk/(dx(6)*dx(6)*dz(20))     
-!            cc(6,21,7)=cc(6,21,7)+0.5_rk*86400.0_rk*dt*1292._rk/(dx(6)*dx(6)*dz(20))   
-!            cc(1,21,7)=cc(1,21,7)+86400.0_rk*dt*1292._rk/(dx(1)*dx(1)*dz(21))       
-
+!            cc(6,21,7)=cc(6,21,7)+0.5_rk*86400.0_rk*dt*1292._rk/(dx(6)*dx(6)*dz(21))   
+    
+            cc(2,21,7)=cc(2,21,7)+86400.0_rk*dt*1292._rk/(dx(2)*dx(2)*dz(21))  
     !________Check for NaNs (stopping if any found)____________________!
             do ip=1,par_max
               do i=i_min,i_water

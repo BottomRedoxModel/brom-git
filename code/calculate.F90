@@ -476,12 +476,12 @@
 
     dtt = 86400.0_rk*dt/freq_sed !Sedimentation model time step [seconds]
     dcc = 0.0_rk
-    sink = 0.0_rk
+!    sink = 0.0_rk
     w_1 = 0.0_rk
     u_1 = 0.0_rk
     w_1c = 0.0_rk
     u_1c = 0.0_rk
-
+    sink(i,:,:) = 0.0_rk
 
     !Compute vertical velocity in water column (sinking/floating) using the FABM.
     wbio = 0.0_rk

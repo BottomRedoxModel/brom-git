@@ -56,7 +56,7 @@ instances:
 #      bctype_bottom_niva_brom_carb_Alk: 1
 #      bc_bottom_niva_brom_carb_Alk: 11500.
 #
-#      bctype_bottom_niva_brom_carb_DIC: 1
+#      bctypef_bottom_niva_brom_carb_DIC: 1
 #      bc_bottom_niva_brom_carb_DIC: 12000.
 #
 #      bctype_bottom_niva_brom_bio_NH4: 1

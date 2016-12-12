@@ -71,7 +71,7 @@ instances:
       r_CHON_nut_oxy: 0.113  # Specific rate of CHON oxic mineralization, (1/d)
       Tda: 13.              # Coefficient for dependence of mineralization on t
       beta_da: 20.          # Coefficient for dependence of mineralization on t
-      Wchon: -0.            # CHON sinking rate, (m/d)
+      Wchon: -2.            # CHON sinking rate, (m/d)
       Bu: 0.5              # Burial coeficient for lower boundary, (nd)
     coupling:
       Oxy: niva_oxydep/Oxy
