@@ -750,7 +750,7 @@
 !            cc(6,20,7)=cc(6,20,7)+0.5_rk*86400.0_rk*dt*1292._rk/(dx(6)*dx(6)*dz(20))     
 !            cc(6,21,7)=cc(6,21,7)+0.5_rk*86400.0_rk*dt*1292._rk/(dx(6)*dx(6)*dz(21))   
     if (inj_swith.eq.1)  then
-        do ip = 1, 8 !par_max
+        do ip = 1, par_max
 !            do while ((par_name(ip).eq.get_brom_name("inj_var_name"))) 
            if (par_name(ip).eq.get_brom_name("inj_var_name")) exit 
                inj_num = ip+1           
