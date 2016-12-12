@@ -476,6 +476,7 @@
     integer      :: show_maxmin, show_kztCFL, show_wCFL, show_nan, show_nan_kztCFL, show_nan_wCFL     !options for runtime output to screen
     integer      :: bc_units_convert, sediments_units_convert !options for conversion of concentrations units in the sediment 
     integer      :: julianday, model_year
+    integer      :: k_inj,i_inj,inj_swith,inj_num    !#number of layer and column to inject into
     real(rk)     :: cnpar                            !"Implicitness" parameter for GOTM vertical diffusion (set in brom.yaml)
     real(rk)     :: cc0                              !Resilient concentration (same for all variables)
     real(rk)     :: omega                            !angular frequency of sinusoidal forcing = 2*pi/365 rads/day
@@ -484,6 +485,8 @@
     real(rk)     :: hmix_rate_uniform                !uniform horizontal relaxation if prescribed
     real(rk)     :: injection_rate
     real(rk), parameter :: pi=3.141592653589793_rk
+    character(len=attribute_length), allocatable, dimension(:)    :: inj_var_name
+    
     omega = 2.0_rk*pi/365.0_rk
 
     !Get parameters for the time-stepping and vertical diffusion / sedimentation
@@ -502,7 +505,10 @@
     bc_units_convert = get_brom_par("bc_units_convert")
     sediments_units_convert = get_brom_par("sediments_units_convert")
     hmix_rate_uniform = get_brom_par("hmix_rate_uniform")
-    injection_rate = get_brom_par("injection_rate")    
+    injection_rate = get_brom_par("injection_rate") 
+    k_inj = get_brom_par("k_injection") 
+    i_inj = get_brom_par("i_injection") 
+    inj_swith = get_brom_par("injection_swith")
     idt = int(1._rk/dt)                                      !number of cycles per day
     model_year = 0
     kzti = 0.0_rk
@@ -742,8 +748,15 @@
 !            !Source of "acetate" 1292 mmol/sec, should be devided to the volume of the grid cell, i.e. dz(k)*dx(i)*dx(i)
 !            cc(6,20,7)=cc(6,20,7)+0.5_rk*86400.0_rk*dt*1292._rk/(dx(6)*dx(6)*dz(20))     
 !            cc(6,21,7)=cc(6,21,7)+0.5_rk*86400.0_rk*dt*1292._rk/(dx(6)*dx(6)*dz(21))   
-
-            cc(2,21,7)=cc(2,21,7)+86400.0_rk*dt*injection_rate/(dx(2)*dx(2)*dz(21))  
+    if (inj_swith.eq.1)  then
+        do ip = 1, 8 !par_max
+!            do while ((par_name(ip).eq.get_brom_name("inj_var_name"))) 
+           if (par_name(ip).eq.get_brom_name("inj_var_name")) exit 
+               inj_num = ip+1           
+        end do 
+!        print *, "injection num", inj_num
+        cc(i_inj,k_inj,inj_num)=cc(i_inj,k_inj,inj_num)+86400.0_rk*dt*injection_rate/(dx(i_inj)*dx(i_inj)*dz(k_inj))  
+    end if            
     !________Check for NaNs (stopping if any found)____________________!
             do ip=1,par_max
               do i=i_min,i_water
