@@ -15,8 +15,8 @@ instances:
       k_min: 1                    # Minimum k number defining the layer that is in contact with the atmosphere (default = 1) 
       k_points_below_water: 0     # Number of levels below the water/BBL boundary (default = 20)
       i_min: 1                    # Minimum i number (default = 1)
-      i_water: 3                  # Number of i for water column (default = 1)       
-      i_max: 3                    # Maximum i number  (default = 1)
+      i_water: 5                  # Number of i for water column (default = 1)       
+      i_max: 5                    # Maximum i number  (default = 1)
 #Note: (i_min,i_water,i_max) should be (1,1,1) for 1D applications
 #
 #
@@ -42,32 +42,32 @@ instances:
 #      a1top_niva_brom_redox_SO4: 20000
 #      a2top_niva_brom_redox_SO4: 2
 #      a3top_niva_brom_redox_SO4: 60.
-      bctype_bottom_niva_brom_redox_SO4: 1
-      bc_bottom_niva_brom_redox_SO4: 9000.
+#      bctype_bottom_niva_brom_redox_SO4: 1
+#      bc_bottom_niva_brom_redox_SO4: 9000.
 #
-      bctype_top_niva_brom_redox_Mn4: 1
-      bc_top_niva_brom_redox_Mn4: 10.E-4
+#      bctype_top_niva_brom_redox_Mn4: 1
+#      bc_top_niva_brom_redox_Mn4: 10.E-4
 #
-      bctype_top_niva_brom_redox_Fe3: 1
-      bc_top_niva_brom_redox_Fe3: 1.E-4
+#      bctype_top_niva_brom_redox_Fe3: 1
+#      bc_top_niva_brom_redox_Fe3: 1.E-4
 #
-      bctype_top_niva_brom_carb_Alk: 1
-      bc_top_niva_brom_carb_Alk: 2300.
-      bctype_bottom_niva_brom_carb_Alk: 1
-      bc_bottom_niva_brom_carb_Alk: 11500.
+#      bctype_top_niva_brom_carb_Alk: 1
+#      bc_top_niva_brom_carb_Alk: 2300.
+#      bctype_bottom_niva_brom_carb_Alk: 1
+#      bc_bottom_niva_brom_carb_Alk: 11500.
 #
-      bctype_bottom_niva_brom_carb_DIC: 1
-      bc_bottom_niva_brom_carb_DIC: 12000.
+#      bctype_bottom_niva_brom_carb_DIC: 1
+#      bc_bottom_niva_brom_carb_DIC: 12000.
 #
-      bctype_bottom_niva_brom_bio_NH4: 1
-      bc_bottom_niva_brom_bio_NH4: 900.
+#      bctype_bottom_niva_brom_bio_NH4: 1
+#      bc_bottom_niva_brom_bio_NH4: 900.
 #
-      bctype_top_niva_brom_bio_NO3: 2
-      a1top_niva_brom_bio_NO3: 3. # 3
-      a2top_niva_brom_bio_NO3: 3.
-      a3top_niva_brom_bio_NO3: 60.
-      bctype_bottom_niva_brom_bio_NO3: 1
-      bc_bottom_niva_brom_bio_NO3: 0.
+#      bctype_top_niva_brom_bio_NO3: 2
+#      a1top_niva_brom_bio_NO3: 3. # 3
+#      a2top_niva_brom_bio_NO3: 3.
+#      a3top_niva_brom_bio_NO3: 60.
+#      bctype_bottom_niva_brom_bio_NO3: 1
+#      bc_bottom_niva_brom_bio_NO3: 0.
 #
       bctype_top_niva_oxydep_NUT: 4
 #
@@ -88,12 +88,12 @@ instances:
       h_adv: 1 
 #     0 to assume no horizontal turbulence (default, does not need to be explicitly set)
 #     1 for implementing horizontal turbulence 
-      h_turb: 1
+      h_turb: 0
 #     0 to assume no horizontal relaxation (default, does not need to be explicitly set)
 #     1 for relaxation  model: hmix = hmix_rate*(X_0 - X)  
       h_relax: 1
 #     horizontal resolution (m) in case of constant value 
-      dx_adv : 500.
+      dx_adv : 250.
 #
 #
 ##---Horizontal relaxation (side mixing with climatic data) parameters------------------------------------------------------------------

@@ -682,7 +682,8 @@
         kz_w(i,:,:) = min(0.5,kz_w(1,:,:))
         u_x_w(i,:,:)= u_x_w(1,:,:)  !convert to m/s from cm/s
     enddo
-    
+   else
+    u_x_w=0.0_rk     
    endif
 
     !Free up memory
