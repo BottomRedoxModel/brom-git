@@ -418,11 +418,12 @@
     enddo
     
     write(*,*) "Made physics of BBL, sediments"
+    
+    cc_hmix=0.0_rk
 
     if(h_relax.eq.1) then   
     !Get horizontal relaxation parameters from brom.yaml:
     !hmixtype = 0, 1 or 2  for no horizontal relaxation (default), box model mixing respectively
-                cc_hmix=0.0_rk
         do ip=1,par_max
             hmixtype(i_water,ip) = get_brom_par('hmix_' // trim(par_name(ip)),0.0_rk)
             hmixtype(:,ip)=hmixtype(i_water,ip)        
@@ -439,7 +440,7 @@
                     end do
                 end do 
                 close(20)
-                do i=i_min,i_water
+                do i=i_min,i_water-1
                     cc_hmix(i,:,:,:)=cc_hmix(i_water,:,:,:)
                 enddo
             end if
