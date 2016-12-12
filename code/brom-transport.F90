@@ -482,6 +482,7 @@
     real(rk)     :: O2stat                           !oxygen status of sediments (factor modulating the bioirrigation rate)
     real(rk)     :: a1_bioirr                        !to detect whether or not bioirrigation is activated
     real(rk)     :: hmix_rate_uniform                !uniform horizontal relaxation if prescribed
+    real(rk)     :: injection_rate
     real(rk), parameter :: pi=3.141592653589793_rk
     omega = 2.0_rk*pi/365.0_rk
 
@@ -501,6 +502,7 @@
     bc_units_convert = get_brom_par("bc_units_convert")
     sediments_units_convert = get_brom_par("sediments_units_convert")
     hmix_rate_uniform = get_brom_par("hmix_rate_uniform")
+    injection_rate = get_brom_par("injection_rate")    
     idt = int(1._rk/dt)                                      !number of cycles per day
     model_year = 0
     kzti = 0.0_rk
@@ -740,8 +742,8 @@
 !            !Source of "acetate" 1292 mmol/sec, should be devided to the volume of the grid cell, i.e. dz(k)*dx(i)*dx(i)
 !            cc(6,20,7)=cc(6,20,7)+0.5_rk*86400.0_rk*dt*1292._rk/(dx(6)*dx(6)*dz(20))     
 !            cc(6,21,7)=cc(6,21,7)+0.5_rk*86400.0_rk*dt*1292._rk/(dx(6)*dx(6)*dz(21))   
-    
-            cc(2,21,7)=cc(2,21,7)+86400.0_rk*dt*1292._rk/(dx(2)*dx(2)*dz(21))  
+
+            cc(2,21,7)=cc(2,21,7)+86400.0_rk*dt*injection_rate/(dx(2)*dx(2)*dz(21))  
     !________Check for NaNs (stopping if any found)____________________!
             do ip=1,par_max
               do i=i_min,i_water
