@@ -442,11 +442,11 @@
 !=======================================================================================================================
     subroutine calculate_sed(i, k_max, par_max, model, cc, wti, sink, dcc, dcc_R, bctype_top, bctype_bottom, &
         bc_top, bc_bottom, hz, dz, k_bbl_sed, wbio, w_b, u_b, julianday, dt, freq_sed, dynamic_w_sed, is_solid, &
-        rho, phi1, fick, k_sed1, K_O2s, kz_bio, id_O2, dphidz_SWI, cc0)
+        rho, phi1, fick, k_sed1, K_O2s, kz_bio, id_O2, dphidz_SWI, cc0, bott_flux, bott_source)
 
     !Calculates vertical advection (sedimentation) in the water column and sediments
 
-    use fabm, only: type_model, fabm_get_vertical_movement
+    use fabm, only: type_model, fabm_get_vertical_movement, fabm_do_bottom 
 
     implicit none
 
@@ -463,7 +463,8 @@
     !Output variables
     real(rk), dimension(:,:,:), intent(out)     :: wbio, wti
     real(rk), dimension(:,:,:), intent(out)     :: sink, dcc
-
+    real(rk), dimension(:,:), intent(out)       :: bott_flux, bott_source
+ 
     !Input/output variables
     type (type_model), intent(inout)            :: model
     real(rk), dimension(:,:,:), intent(inout)   :: cc
@@ -623,6 +624,15 @@
             cc(i,k,:) = cc(i,k,:) + dtt*dcc(i,k,:)
         end do
         !cc bottom layer
+        bott_flux = 0.0_rk
+        call fabm_do_bottom(model, i, i, bott_flux(i:i,:),bott_source(i:i,:))
+        do ip=1,par_max
+            if (is_solid(ip).eq.1) then            
+                dcc(i,k_max,ip) = dcc(i,k_max,ip) + bott_flux(i,ip) / hz(k_max)
+                sink(i,k_max+1,:) = bott_flux(i,:)
+            endif
+        end do
+!            cc(i,k_max,ip) = cc(i,k_max,ip) + dtt*dcc(i,k_max,ip)               
         do ip=1,par_max
             if (bctype_bottom(i,ip).gt.0) then
                 cc(i,k_max,ip) = bc_bottom(i,ip)
@@ -630,7 +640,6 @@
                 cc(i,k_max,ip) = cc(i,k_max,ip) + dtt*dcc(i,k_max,ip)
             end if
         end do
-
         cc(i,:,:) = max(cc0, cc(i,:,:)) !Impose resilient concentration
     end do
 

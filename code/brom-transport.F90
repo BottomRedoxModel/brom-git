@@ -672,7 +672,7 @@
           do i=i_min, i_water
               call calculate_sed(i, k_max, par_max, model, cc, wti, sink, dcc, dcc_R, bctype_top, bctype_bottom, &
                 bc_top, bc_bottom, hz, dz, k_bbl_sed, wbio, w_b, u_b, julianday, dt, freq_sed, dynamic_w_sed, is_solid, &
-                rho, phi1, fick, k_sed1, K_O2s, kz_bio, id_O2, dphidz_SWI, cc0)
+                rho, phi1, fick, k_sed1, K_O2s, kz_bio, id_O2, dphidz_SWI, cc0, bott_flux, bott_source)
           enddo
 
 !________Horizontal relaxation_________!
@@ -702,8 +702,6 @@
                 dcc(i_water,:,ip) = hmix_rate(i_water,:,julianday)*(cc(i_min,:,ip)+cc(i_water-1,:,ip)-2.0_rk*cc(i_water,:,ip))/dx(i_water)/dx(i_water)
             do i=i_min, i_water
                 cc(i,:,ip) = cc(i,:,ip) + dt*dcc(i,:,ip) !Simple Euler time step
-!                if (bctype_top(i,ip).gt.0) cc(i,1,ip) = bc_top(i,ip) !Reassert Dirichlet BC if required
-!                cc(i,:,ip) = max(cc0, cc(i,:,ip)) !Impose resilient concentration
             enddo        
         enddo          
     end if
@@ -719,36 +717,13 @@
                        + max(0.0_rk,-u_x_w(i_min,:,julianday))*(cc(i_min+1,:,ip)-cc(i_min,:,ip))/dx(i_min)
                 dcc(i_water,:,ip) = max(0.0_rk,u_x_w(i_water,:,julianday))*(cc(i_water-1,:,ip)-cc(i_water,:,ip))/dx(i_water)  &
                        + max(0.0_rk,-u_x_w(i_water,:,julianday))*(cc(i_min,:,ip)-cc(i_water,:,ip))/dx(i_water)
-            !Add surface and bottom fluxes if treated here
-!            if (surf_flux_with_diff.eq.0) then
-!                surf_flux = 0.0_rk
-!                call fabm_do_surface(model, i, i, surf_flux(i:i,:))
-!                fick(i,k_min,:) = surf_flux(i,:)
-!!                do ip=1,par_max
-!                    dcc(i,k_min,ip) = dcc(i,k_min,ip) + surf_flux(i,ip) / hz(k_min)
-!!                end do
-!            end if
-!            if (bott_flux_with_diff.eq.0) then
-!                bott_flux = 0.0_rk
-!                call fabm_do_bottom(model, i, i, bott_flux(i:i,:),bott_source(i:i,:))
-!                fick(i,k_max+1,:) = bott_flux(i,:)
-!!                do ip=1,par_max
-!                    dcc(i,k_max,ip) = dcc(i,k_max,ip) + bott_flux(i,ip) / hz(k_max)
-!!                end do
-!            end if                
-                
-                
             do i=i_min, i_water
                     cc(i,:,ip) = cc(i,:,ip) + dt*dcc(i,:,ip) !Simple Euler time step
-!                    if (bctype_top(i,ip).gt.0) cc(i,1,ip) = bc_top(i,ip) !Reassert Dirichlet BC if required
-!                    cc(i,:,ip) = max(cc0, cc(i,:,ip)) !Impose resilient concentration
             enddo        
         enddo          
     endif
 !________Injection____________________!
 !            !Source of "acetate" 1292 mmol/sec, should be devided to the volume of the grid cell, i.e. dz(k)*dx(i)*dx(i)
-!            cc(6,20,7)=cc(6,20,7)+0.5_rk*86400.0_rk*dt*1292._rk/(dx(6)*dx(6)*dz(20))     
-!            cc(6,21,7)=cc(6,21,7)+0.5_rk*86400.0_rk*dt*1292._rk/(dx(6)*dx(6)*dz(21))   
     if (inj_swith.eq.1)  then
         do ip = 1, par_max
 !            do while ((par_name(ip).eq.get_brom_name("inj_var_name"))) 
@@ -756,7 +731,9 @@
                inj_num = ip+1           
         end do 
 !        print *, "injection num", inj_num
-        cc(i_inj,k_inj,inj_num)=cc(i_inj,k_inj,inj_num)+86400.0_rk*dt*injection_rate/(dx(i_inj)*dx(i_inj)*dz(k_inj))  
+        cc(i_inj,k_inj,inj_num)=cc(i_inj,k_inj,inj_num)+86400.0_rk*dt*injection_rate/(dx(i_inj)*dx(i_inj)*dz(k_inj))
+!        cc(:,k_inj,2)=cc(:,k_inj,4)+86400.0_rk*dt*10000./(dx(i_inj)*dx(i_inj)*dz(k_inj))    
+!        cc(:,k_inj,inj_num)=cc(:,k_inj,inj_num)+86400.0_rk*dt*injection_rate/(dx(i_inj)*dx(i_inj)*dz(k_inj))          
     end if            
     !________Check for NaNs (stopping if any found)____________________!
             do ip=1,par_max
