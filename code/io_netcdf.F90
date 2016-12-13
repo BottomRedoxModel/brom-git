@@ -171,8 +171,10 @@
     call check_err(nf90_inq_varid(ncid, trim(ncinz_name), z_varid))
     call check_err(nf90_inq_varid(ncid, trim(ncinz2_name), z2_varid))
     call check_err(nf90_inq_varid(ncid, trim(ncintime_name), time_varid))
+    if (h_adv.ne.0)then
     call check_err(nf90_inq_varid(ncid, 'u', u_varid))
     call check_err(nf90_inq_varid(ncid, 'v', v_varid))
+    endif
     !use temperature variable to get ids of midpoint depth, time, and possibly lat/lon dimensions
     call check_err(nf90_inquire_variable(ncid, t_varid, dimids = dimids1))
     if (nc_file_source.ne.3)then
@@ -279,7 +281,7 @@
       if (ndims.eq.4) then
           allocate(t_temp2(ll_rec(1),ll_rec(2),h_rec,time_rec))
           allocate(s_temp2(ll_rec(1),ll_rec(2),h_rec,time_rec))
-          !allocate(kz_temp2(ll_rec(1),ll_rec(2),h_rec2,time_rec))
+          allocate(kz_temp2(ll_rec(1),ll_rec(2),h_rec2,time_rec))
           allocate(kz_temp(h_rec2,time_rec))
           if (use_Eair.eq.1) allocate(Eair_temp2(ll_rec(1),ll_rec(2),time_rec))
           if (use_hice.eq.1) allocate(hice_temp2(ll_rec(1),ll_rec(2),time_rec))
