@@ -433,7 +433,7 @@
             if (hmixtype(i_water,ip).eq.2) then
     !            hmix_file = get_brom_name("hmix_filename_" // trim(par_name(ip)(13:))) !niva_oxydep_NUT
                 write(*,*) "Horizontal relaxation (ASCII) assumed for " // trim(par_name(ip))
-                open(20, file= get_brom_name("hmix_filename_" // trim(par_name(ip)(13:))))!'' // hmix_file
+                open(20, file= get_brom_name("hmix_filename_" // trim(par_name(ip))))!'' // hmix_file
                 do k=1,k_wat_bbl
                     do i_day=1,days_in_yr
                         read(20, *) i_dummy,i_dummy,cc_hmix(i_water,ip,k,i_day) ! NODC data on NO3 (i_max,par_max,k_max,days_in_yr))
@@ -514,26 +514,6 @@
     model_year = 0
     kzti = 0.0_rk
 
-    !!!!if (h_relax.eq.1) then
-    !!!!    cc_hmix=0.0_rk
-    !!!!    open(20, file='spa_no3.dat')
-    !!!!    do k=1,k_wat_bbl
-    !!!!        do i_day=1,days_in_yr
-    !!!!            read(20, *) ip,ip,cc_hmix(i_water,3,k,i_day) ! NODC data on NO3 (i_max,par_max,k_max,days_in_yr))
-    !!!!        end do
-    !!!!    end do
-    !!!!    close(20)
-    !!!!    open(20, file='spa_o2.dat')
-    !!!!    do k=1,k_wat_bbl
-    !!!!        do i_day=1,days_in_yr
-    !!!!            read(20, *) ip,ip,cc_hmix(i_water,1,k,i_day) ! NODC data on O2 i(i_max,par_max,k_max,days_in_yr))
-    !!!!        end do
-    !!!!    end do
-    !!!!    close(20)
-    !!!!    do i=i_min,i_water
-    !!!!        cc_hmix(i,:,:,:)=cc_hmix(i_water,:,:,:)
-    !!!!    enddo
-    !!!!endif  
     
   
         !convert bottom boundary values from 'mass/pore water ml' for dissolved and 'mass/mass' for solids into 'mass/total volume'
