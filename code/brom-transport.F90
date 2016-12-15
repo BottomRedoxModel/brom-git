@@ -231,9 +231,6 @@
         !Note: This uses the netCDF file to set z_w = layer midpoints, dz_w = increments between layer midpoints, hz_w = layer thicknesses
     end if
 
-        call input_netcdf(z_w, dz_w, hz_w, t_w, s_w, kz_w, hmix_rate_w, Eair, use_Eair, hice, use_hice, year, i_water, i_max, &
-        days_in_yr, k_wat_bbl, par_name, par_max, bctype_top, bctype_bottom, cc_top, cc_bottom, hmixtype, cc_hmix_w, h_adv, u_x_w)
-
         !Determine total number of vertical grid points (layers) now that k_wat_bbl is determined
     k_max = k_wat_bbl + k_points_below_water
 
@@ -664,9 +661,10 @@
                     !Calculate tendency dcc (water column only)
                     dcc(i,:,ip) = hmix_rate(i,:,julianday)*2.0_rk*(cc_hmix(i,ip,:,julianday)-cc(i,:,ip))/dx(i)/dx(i)
                     !Update concentration (water column only)
-                    cc(i,:,ip) = cc(i,:,ip) + dt*dcc(i,:,ip) !Simple Euler time step
- !                   if (bctype_top(i,ip).gt.0) cc(i,1,ip) = bc_top(i,ip) !Reassert Dirichlet BC if required
-                        cc(i,:,ip) = max(cc0, cc(i,:,ip)) !Impose resilient concentration
+                do k=1,k_max
+                    cc(i,k,ip) = cc(i,k,ip) + dt*dcc(i,k,ip)
+                end do
+                cc(i,:,ip) = max(cc0, cc(i,:,ip)) !Impose resilient concentration
                 end if
             end do
         enddo
@@ -681,7 +679,9 @@
                 dcc(i_min,:,ip)   = hmix_rate(i_min,:,julianday)*(cc(i_min+1,:,ip)+cc(i_water,:,ip)-2.0_rk*cc(i_min,:,ip))/dx(i_min)/dx(i_min)
                 dcc(i_water,:,ip) = hmix_rate(i_water,:,julianday)*(cc(i_min,:,ip)+cc(i_water-1,:,ip)-2.0_rk*cc(i_water,:,ip))/dx(i_water)/dx(i_water)
             do i=i_min, i_water
-                cc(i,:,ip) = cc(i,:,ip) + dt*dcc(i,:,ip) !Simple Euler time step
+                do k=1,k_max
+                    cc(i,k,ip) = cc(i,k,ip) + dt*dcc(i,k,ip) !Simple Euler time step
+                enddo
             enddo        
         enddo          
     end if
@@ -698,7 +698,9 @@
                 dcc(i_water,:,ip) = max(0.0_rk,u_x_w(i_water,:,julianday))*(cc(i_water-1,:,ip)-cc(i_water,:,ip))/dx(i_water)  &
                        + max(0.0_rk,-u_x_w(i_water,:,julianday))*(cc(i_min,:,ip)-cc(i_water,:,ip))/dx(i_water)
             do i=i_min, i_water
-                    cc(i,:,ip) = cc(i,:,ip) + dt*dcc(i,:,ip) !Simple Euler time step
+                do k=1,k_max
+                    cc(i,k,ip) = cc(i,k,ip) + dt*dcc(i,k,ip) !Simple Euler time step
+                enddo
             enddo        
         enddo          
     endif
