@@ -579,7 +579,7 @@
         hice = 0.0_rk !Default in case not read from hice_temp (use_hice = 0)
         if (use_hice.eq.1) hice(1:days_in_yr) = hice_temp(istart:istart+days_in_yr-1)
     end if
-    !istart = istart + 2
+    if (nc_file_source.eq.2) istart = istart + 2  !for GETM
     if (ndims.eq.4) then  !Assuming netcdf input dimensions (lat/lon,lat/lon,depth,time) for variables (t,s,kz)
         do i=1,days_in_yr !Loop over days_in_yr
             t_w(i_water,1:k_wat_bbl,i) = t_temp2(ll_sel(1),ll_sel(2),inds,istart+i-1)
@@ -921,7 +921,7 @@
         call check_err(nf90_put_var(nc_id, T_id, t(:,:,julianday), start_cc, count_cc))
         call check_err(nf90_put_var(nc_id, S_id, s(:,:,julianday), start_cc, count_cc))
         call check_err(nf90_put_var(nc_id, Kz_id, kz(:,:,julianday), start_flux, count_flux))
-        call check_err(nf90_put_var(nc_id, u_x_w_id, u_x_w(:,:,julianday), start_cc, count_cc))
+        if (i_max.gt.1) call check_err(nf90_put_var(nc_id, u_x_w_id, u_x_w(:,:,julianday), start_cc, count_cc))
         call check_err(nf90_put_var(nc_id, Kz_sol_id, kzti(:,:,ip_sol), start_flux, count_flux))
         call check_err(nf90_put_var(nc_id, Kz_par_id, kzti(:,:,ip_par), start_flux, count_flux))
         call check_err(nf90_put_var(nc_id, w_sol_id, wti(:,:,ip_sol), start_flux, count_flux))
