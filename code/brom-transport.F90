@@ -619,6 +619,7 @@
             end if
             if (bott_flux_with_diff.eq.0) then
                 bott_flux = 0.0_rk
+                bott_source = 0.0_rk                
                 call fabm_do_bottom(model, i, i, bott_flux(i:i,:),bott_source(i:i,:))
                 sink(i,k_max+1,:) = bott_flux(i,:)
                 do ip=1,par_max
