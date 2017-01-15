@@ -193,7 +193,7 @@
     idim_z = minloc(dimids1,1,mask=dimids1.eq.z_varid)
     select case (nc_file_source) 
         case (1) !ROMS
-          idim_time = minloc(dimids1,1,mask=dimids1.eq.time_varid)  
+          idim_time = 2 !minloc(dimids1,1,mask=dimids1.eq.time_varid)  
           call check_err(nf90_inquire_dimension(ncid, dimids1(idim_z), len = h_rec))
           call check_err(nf90_inquire_dimension(ncid, dimids1(idim_time), len = time_rec))
         case (2) !GETM
@@ -315,10 +315,10 @@
         call check_err(nf90_get_var(ncid, t_varid, t_temp))
         call check_err(nf90_get_var(ncid, s_varid, s_temp))
         call check_err(nf90_get_var(ncid, kz_varid, kz_temp))
-    if (nc_file_source.eq.3) then
-        call check_err(nf90_get_var(ncid, u_varid, u_temp))
-        call check_err(nf90_get_var(ncid, v_varid, v_temp))
-    endif
+        if (nc_file_source.eq.3) then
+            call check_err(nf90_get_var(ncid, u_varid, u_temp))
+            call check_err(nf90_get_var(ncid, v_varid, v_temp))
+        endif
         kz_temp = ncinkz_fac * kz_temp
         if (use_Eair.eq.1) then
             call check_err(nf90_get_var(ncid, Eair_varid, Eair_temp))
@@ -413,7 +413,7 @@
     end do
     ni = iend-istart+1
     select case (nc_file_source) 
-    case (1,2) !ROMS
+    case (1,2) !ROMS, GETM
       if (ni.lt.days_in_yr) then
         write(*,*) "Could not find days_in_yr time inputs starting from 1st day of selected year (ni = ", ni, ", stopping"
         stop
@@ -544,6 +544,9 @@
 
     !Set the water temperature (t_w), salinity (s_w), vertical diffusivity (kz_w),
     !and (if required) the surface irradiance (Eair) and ice thickness (hice)
+
+    if (nc_file_source.ne.3) istart = istart + 2  !for GETM, ROMS
+
     if (ndims.eq.2) then  !Assuming netcdf input dimensions (depth,time) for variables (t,s,kz)
         do i=1,days_in_yr !Loop over days_in_yr
             t_w(i_water,1:k_wat_bbl,i) = t_temp(inds,istart+i-1)
@@ -579,7 +582,7 @@
         hice = 0.0_rk !Default in case not read from hice_temp (use_hice = 0)
         if (use_hice.eq.1) hice(1:days_in_yr) = hice_temp(istart:istart+days_in_yr-1)
     end if
-    if (nc_file_source.eq.2) istart = istart + 2  !for GETM
+
     if (ndims.eq.4) then  !Assuming netcdf input dimensions (lat/lon,lat/lon,depth,time) for variables (t,s,kz)
         do i=1,days_in_yr !Loop over days_in_yr
             t_w(i_water,1:k_wat_bbl,i) = t_temp2(ll_sel(1),ll_sel(2),inds,istart+i-1)
