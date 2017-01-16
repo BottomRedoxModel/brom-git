@@ -299,8 +299,8 @@
     
 
     !Specify horizontal transport
+        dx(:)= dx_adv !500.0_rk        !horizontal resolution in m
     if (h_adv.eq.1.or.h_turb.eq.1) then
-            dx(:)= dx_adv !500.0_rk        !horizontal resolution in m
             x(1)=0.0_rk
 !            u_x_w(:,:,:)=0.02  !horizontal velocity in m/s if not read from forcing file...
         do i=2,i_max
@@ -683,6 +683,7 @@
                 do k=1,k_max
                     cc(i,k,ip) = cc(i,k,ip) + dt*dcc(i,k,ip) !Simple Euler time step
                 enddo
+                    cc(i,:,ip) = max(cc0, cc(i,:,ip)) !Impose resilient concentration
             enddo        
         enddo          
     end if
@@ -702,6 +703,7 @@
                 do k=1,k_max
                     cc(i,k,ip) = cc(i,k,ip) + dt*dcc(i,k,ip) !Simple Euler time step
                 enddo
+                    cc(i,:,ip) = max(cc0, cc(i,:,ip)) !Impose resilient concentration
             enddo        
         enddo          
     endif
