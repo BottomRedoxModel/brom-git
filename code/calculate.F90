@@ -207,10 +207,12 @@
         if (surf_flux_with_diff.eq.1) call fabm_do_surface(model, i, i, surf_flux(i:i,:))
         !Note: We MUST pass the range "i:i" to fabm_do_surface -- a single value "i" will produce compiler error!
         !Note: surf_flux has units [mass/m2/s] and is positive into the ocean (air->sea), see e.g. brom_carb.F90 and brom_bio.F90
-
-
         !!Calculate total vertical diffusivity [m2/s] and diffusive Courant number
-        O2stat = cc(i,k_bbl_sed,id_O2) / (cc(i,k_bbl_sed,id_O2) + K_O2s)   !Oxygen status of sediments set by O2 level just above sediment surface
+        if(k_bbl_sed.ne.k_max) then
+            O2stat = cc(i,k_bbl_sed,id_O2) / (cc(i,k_bbl_sed,id_O2) + K_O2s)   !Oxygen status of sediments set by O2 level just above sediment surface
+        else
+            O2stat = 0.0_rk
+        endif
         do ip=1,par_max
             kzti(i,:,ip) = kz(i,:,julianday) + kz_mol(i,:,ip) + kz_bio(i,:)*O2stat
             !Total diffusivity = turbulent (zero in sediments) + molecular (zero in water column) + bioturbation (zero in water column)
@@ -257,13 +259,13 @@
             !Bottom boundary
             if (bott_flux_with_diff.eq.1) then
                 bott_flux = 0.0_rk
+                bott_source = 0.0_rk
 !                call fabm_do_bottom(model, i, i, bott_flux(i:i,:),bott_source(i:i,:))
                 fick(i,k_max+1,:) = bott_flux(i,:)
             else
                 fick(i,k_max+1,:) = 0.0_rk
             endif
         end if
-
 
 
         !!Perform turbulent diffusion update----------------------------------------------------------------------------
@@ -286,7 +288,6 @@
             do k=1,k_max
                 dcc(i,k,:) = -1.0_rk * (fick(i,k+1,:)-fick(i,k,:)) / hz(k)
             end do
-
 
             !!Time integration
             !cc surface layer
@@ -551,7 +552,11 @@
     !
     !where w_1cinf can be approximated by the deepest value of w_1c
     !
-    O2stat = cc(i,k_bbl_sed,id_O2) / (cc(i,k_bbl_sed,id_O2) + K_O2s)   !Oxygen status of sediments set by O2 level just above sediment surface
+    if(k_bbl_sed.ne.k_max) then  
+        O2stat = cc(i,k_bbl_sed,id_O2) / (cc(i,k_bbl_sed,id_O2) + K_O2s)   !Oxygen status of sediments set by O2 level just above sediment surface
+    else
+        O2stat = 0.0_rk
+    endif
     w_1(k_bbl_sed+1) = -1.0_rk*O2stat*kz_bio(i,k_bbl_sed+1)*dphidz_SWI / (1.0_rk-phi1(i,k_bbl_sed+1))
     u_1(k_bbl_sed+1) = O2stat*kz_bio(i,k_bbl_sed+1)*dphidz_SWI / phi1(i,k_bbl_sed+1)
     if (dynamic_w_sed.eq.1) then

@@ -412,18 +412,18 @@
         if (iend.eq.-1.and.i.eq.time_rec) iend = i        !...or the last index in the file
     end do
     ni = iend-istart+1
-    select case (nc_file_source) 
-    case (1,2) !ROMS, GETM
+    !select case (nc_file_source) 
+!    case (1,2) !ROMS, GETM
       if (ni.lt.days_in_yr) then
         write(*,*) "Could not find days_in_yr time inputs starting from 1st day of selected year (ni = ", ni, ", stopping"
         stop
       end if
-    case (3) !FVCOM
-      if (ni.lt.359) then !(ni.lt.days_in_yr) then
-        write(*,*) "Could not find days_in_yr time inputs starting from 1st day of selected year (ni = ", ni, ", stopping"
-        stop
-      end if
-    end select
+    !case (3) !FVCOM
+    !  if (ni.lt.359) then !(ni.lt.days_in_yr) then
+    !    write(*,*) "Could not find days_in_yr time inputs starting from 1st day of selected year (ni = ", ni, ", stopping"
+    !    stop
+    !  end if
+    !end select
 
 
     !Check - these results can be validated by importing ocean_time into Matlab and converting to human dates using http://www.epochconverter.com/
@@ -439,6 +439,7 @@
 
 
     !Set the index vectors for subsampling the netCDF input (coarsening the vertical resolution)
+
     if (nc_set_k_wat_bbl.eq.0) then
         dind = real(h_rec-1,kind=rk)/real(k_wat_bbl,kind=rk)
         do i=1,k_wat_bbl
@@ -545,8 +546,8 @@
     !Set the water temperature (t_w), salinity (s_w), vertical diffusivity (kz_w),
     !and (if required) the surface irradiance (Eair) and ice thickness (hice)
 
-    if (nc_file_source.ne.3) istart = istart + 2  !for GETM, ROMS
-
+    if (nc_file_source.ne.3)  istart = istart + 2  !for GETM, ROMS
+!    if (nc_file_source.eq.3)  istart = istart -140
     if (ndims.eq.2) then  !Assuming netcdf input dimensions (depth,time) for variables (t,s,kz)
         do i=1,days_in_yr !Loop over days_in_yr
             t_w(i_water,1:k_wat_bbl,i) = t_temp(inds,istart+i-1)
@@ -650,29 +651,23 @@
    endif
 
 
-    if (nc_file_source.eq.3)  then
-
-
-    do iday=1,357 !Loop over days availabel from FVCOM
-            t_w(i_water,1:k_wat_bbl,iday) = t_temp(inds,istart+iday+1)
-            s_w(i_water,1:k_wat_bbl,iday) = s_temp(inds,istart+iday+1)
-            kz_w(i_water,1:k_wat_bbl,iday) = kz_temp(inds,istart+iday+1)
+    if (nc_file_source.eq.3)  then  ! FVCOM for Lindesnes
+!  correct days, since they start from August 20 2015, i.e.+122)
+    do iday=1,243 !Loop over days availabel from FVCOM
+            t_w(i_water,1:k_wat_bbl,iday) = t_temp(inds,istart+iday+1+122)
+            s_w(i_water,1:k_wat_bbl,iday) = s_temp(inds,istart+iday+1+122)
+            kz_w(i_water,1:k_wat_bbl,iday) = kz_temp(inds,istart+iday+1+122)
                         kz_w(i_water,k_wat_bbl+1,iday) = 0.
-            u_x_w(i_water,1:k_wat_bbl,iday) = v_temp(inds,istart+iday+1) !(u_temp(inds,istart+iday+1)*u_temp(inds,istart+iday+1)+v_temp(inds,istart+iday+1)*v_temp(inds,istart+iday+1))**0.5
+            u_x_w(i_water,1:k_wat_bbl,iday) = v_temp(inds,istart+iday+1+122) !(u_temp(inds,istart+iday+1)*u_temp(inds,istart+iday+1)+v_temp(inds,istart+iday+1)*v_temp(inds,istart+iday+1))**0.5
     enddo
-    ! here welinear interpolate data to the period from day 357 to day 15 (to eclude first weeks of tun from new initial conditions)
-    do iday=358,365 !Loop over days_in_yr
-      t_w(i_water,1:k_wat_bbl,iday) = t_w(i_water,1:k_wat_bbl,357)+(t_w(i_water,1:k_wat_bbl,15)-t_w(i_water,1:k_wat_bbl,357))*(iday-357)/22
-      s_w(i_water,1:k_wat_bbl,iday) = s_w(i_water,1:k_wat_bbl,357)+(s_w(i_water,1:k_wat_bbl,15)-s_w(i_water,1:k_wat_bbl,357))*(iday-357)/22
-      kz_w(i_water,1:k_wat_bbl,iday) = kz_w(i_water,1:k_wat_bbl,357)+(kz_w(i_water,1:k_wat_bbl,15)-kz_w(i_water,1:k_wat_bbl,357))*(iday-357)/22
-      u_x_w(i_water,1:k_wat_bbl,iday) = u_x_w(i_water,1:k_wat_bbl,357)+(u_x_w(i_water,1:k_wat_bbl,15)-u_x_w(i_water,1:k_wat_bbl,357))*(iday-357)/22
+    do iday=244,365 !Loop over days availabel from FVCOM
+            t_w(i_water,1:k_wat_bbl,iday) = t_temp(inds,istart+iday+1-243)
+            s_w(i_water,1:k_wat_bbl,iday) = s_temp(inds,istart+iday+1-243)
+            kz_w(i_water,1:k_wat_bbl,iday) = kz_temp(inds,istart+iday+1-243)
+                        kz_w(i_water,k_wat_bbl+1,iday) = 0.
+            u_x_w(i_water,1:k_wat_bbl,iday) = v_temp(inds,istart+iday+1-243) !(u_temp(inds,istart+iday+1)*u_temp(inds,istart+iday+1)+v_temp(inds,istart+iday+1)*v_temp(inds,istart+iday+1))**0.5
     enddo
-    do iday=1,14 !Loop over days_in_yr
-      t_w(i_water,1:k_wat_bbl,iday) = t_w(i_water,1:k_wat_bbl,357)+(t_w(i_water,1:k_wat_bbl,15)-t_w(i_water,1:k_wat_bbl,357))*(7+iday)/22
-      s_w(i_water,1:k_wat_bbl,iday) = s_w(i_water,1:k_wat_bbl,357)+(s_w(i_water,1:k_wat_bbl,15)-s_w(i_water,1:k_wat_bbl,357))*(7+iday)/22
-      kz_w(i_water,1:k_wat_bbl,iday) = kz_w(i_water,1:k_wat_bbl,357)+(kz_w(i_water,1:k_wat_bbl,15)-kz_w(i_water,1:k_wat_bbl,357))*(7+iday)/22
-      u_x_w(i_water,1:k_wat_bbl,iday) = u_x_w(i_water,1:k_wat_bbl,357)+(u_x_w(i_water,1:k_wat_bbl,15)-u_x_w(i_water,1:k_wat_bbl,357))*(7+iday)/22
-    enddo
+
     !  correct depths array direction
     do j=1,k_wat_bbl
         t_w  (1,j,:) =  t_w(i_water,k_wat_bbl+1-j,:)
@@ -680,11 +675,13 @@
         kz_w (1,j,:) = kz_w(i_water,k_wat_bbl+1-j,:)
         u_x_w(1,j,:) =u_x_w(i_water,k_wat_bbl+1-j,:)
     enddo
+
+
     ! fill all the horizontal columns 
     do i = 1, i_water
         t_w(i,:,:)  =  t_w(1,:,:)
         s_w(i,:,:)  =  s_w(1,:,:)
-        kz_w(i,:,:) = min(0.5,kz_w(1,:,:))
+        kz_w(i,:,:) = max(0.000001,min(0.15,kz_w(1,:,:)))
         u_x_w(i,:,:)= u_x_w(1,:,:)  !convert to m/s from cm/s
     enddo
    else

@@ -234,8 +234,7 @@
         !Determine total number of vertical grid points (layers) now that k_wat_bbl is determined
     k_max = k_wat_bbl + k_points_below_water
 
-
-    !Allocate full grid variables now that k_max is known
+    !Allocate full grid variables now that k_max is knownk
     allocate(z(k_max))
     allocate(dz(k_max))
     allocate(hz(k_max))
@@ -527,7 +526,10 @@
 
     !Master time step loop over days
     write(*,*) "Starting time stepping"
-    do i_day=0,(last_day-1)                               !BIG Cycle ("i_day"=0,...,last_day-1)
+
+ !_______BIG Cycle ("i_day"=0,...,last_day-1)________!
+
+    do i_day=0,(last_day-1)
         julianday = i_day - int(i_day/days_in_yr)*days_in_yr + 1    !"julianday" (1,2,...,days_in_yr)
         if (julianday==1) model_year = model_year + 1
         write (*,'(a, i4, a, i4)') " model year:", model_year, "; julianday:", julianday
@@ -538,7 +540,11 @@
         call calculate_light(julianday, i, k_bbl_sed, k_max, par_max, hz, Eair, use_Eair, hice, cc, is_solid, rho, Izt)
       enddo
 
-        !If including ice using horizontal coordinate, set ice volume in top cell of ice column
+      ! Reload daily cheanges in t and s
+      call fabm_link_bulk_data(model, standard_variables%temperature, t(:,:,julianday))
+      call fabm_link_bulk_data(model, standard_variables%practical_salinity, s(:,:,julianday))
+
+    !If including ice using horizontal coordinate, set ice volume in top cell of ice column
         !vv = 0.0_rk
         !if (i_max.eq.2) then
         !    if (use_hice.eq.1) vv(1,k_min,1) = max(0.0_rk, hice(julianday))   ! i.e. vv() is an amount of solid matter in the cell
@@ -575,7 +581,7 @@
  !_______vertical diffusion________!
           do i=i_min, i_water
             call calculate_phys(i, k_max, par_max, model, cc, kzti, fick, dcc, bctype_top, bctype_bottom, bc_top, bc_bottom, &
-                surf_flux, bott_flux, bott_source,  k_bbl_sed, dz, hz, kz, kz_mol, kz_bio, julianday, id_O2, K_O2s, dt, freq_turb, &
+                surf_flux, bott_flux, bott_source, k_bbl_sed, dz, hz, kz, kz_mol, kz_bio, julianday, id_O2, K_O2s, dt, freq_turb, &
                 diff_method, cnpar, surf_flux_with_diff,bott_flux_with_diff, bioturb_across_SWI, pF1, pF2, phi_inv, is_solid, cc0)
           enddo
 
@@ -670,6 +676,7 @@
             end do
         enddo
     endif      
+
 !________Horizontal turbulence_________!
     if (h_turb.eq.1) then
         dcc = 0.0_rk
@@ -687,6 +694,7 @@
             enddo        
         enddo          
     end if
+
 !________Horizontal advection_________!
     if (h_adv.eq.1) then
         dcc = 0.0_rk
@@ -707,6 +715,7 @@
             enddo        
         enddo          
     endif
+
 !________Injection____________________!
 !            !Source of "acetate" 1292 mmol/sec, should be devided to the volume of the grid cell, i.e. dz(k)*dx(i)*dx(i)
     if (inj_swith.eq.1)  then
@@ -720,7 +729,8 @@
 !        cc(:,k_inj,2)=cc(:,k_inj,4)+86400.0_rk*dt*10000./(dx(i_inj)*dx(i_inj)*dz(k_inj))    
 !        cc(:,k_inj,inj_num)=cc(:,k_inj,inj_num)+86400.0_rk*dt*injection_rate/(dx(i_inj)*dx(i_inj)*dz(k_inj))          
     end if            
-    !________Check for NaNs (stopping if any found)____________________!
+
+!________Check for NaNs (stopping if any found)____________________!
             do ip=1,par_max
               do i=i_min,i_water
                 if (any(isnan(cc(i,1:k_max,ip)))) then
