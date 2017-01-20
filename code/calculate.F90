@@ -118,6 +118,8 @@
 !                    xk = k0r + kESS*ESS + kPhy*cc(i,k,id_Phy) + kPON*cc(i,k,id_PON)
                     xk = k0r + kESS*ESS + kPhy*cc(i,k,2) + kPON*cc(i,k,4)  !case OxyDep                    
                     !Attenuation over layer k [m^-1] due to background, suspended sediment, phytoplankton, and PON
+                else if (light_model.eq.2) then   
+                    xk = k0r + kESS*ESS + kPhy*cc(i,k,id_Phy) + kPON*cc(i,k,id_PON)                    
                 end if
                 if (light_model.eq.1) then !Extended model accounting for other particulate species modelled in BROM
                     xk = k0r + kESS*ESS + kPhy*cc(i,k,id_Phy) + kPON*cc(i,k,id_PON) + &
@@ -257,6 +259,7 @@
             !Bottom boundary
             if (bott_flux_with_diff.eq.1) then
                 bott_flux = 0.0_rk
+                bott_source = 0.0_rk                
 !                call fabm_do_bottom(model, i, i, bott_flux(i:i,:),bott_source(i:i,:))
                 fick(i,k_max+1,:) = bott_flux(i,:)
             else
@@ -625,6 +628,7 @@
         end do
         !cc bottom layer
         bott_flux = 0.0_rk
+        bott_source = 0.0_rk       
         call fabm_do_bottom(model, i, i, bott_flux(i:i,:),bott_source(i:i,:))
         do ip=1,par_max
             if (is_solid(ip).eq.1) then            

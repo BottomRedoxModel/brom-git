@@ -21,6 +21,6 @@
     !main cycle
     call do_brom_transport()
     !clear all
-    call clear_brom_transport()
+    !call clear_brom_transport()
 
     end program main
