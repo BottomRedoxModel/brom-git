@@ -242,6 +242,7 @@
     do ip=1,par_max
         if (bctype_top(i_water,ip).eq.3) call check_err(nf90_inq_varid(ncid, trim(ncinsurfpar_name(ip)), surf_varid(ip)))
         if (bctype_bottom(i_water,ip).eq.3) call check_err(nf90_inq_varid(ncid, trim(ncinbotpar_name(ip)), bot_varid(ip)))
+        
     select case (nc_file_source) 
         case (1,2) !ROMS, GETM
         if (hmixtype(i_water,ip).eq.1) call check_err(nf90_inq_varid(ncid, trim(ncinhmixpar_name(ip)), hmix_varid(ip)))
@@ -251,7 +252,7 @@
 
     end do
     select case (nc_file_source) 
-        case (1,2) !ROMS
+        case (1,2) !ROMS, GETM
         if (maxval(hmixtype(i_water,:)).eq.1) call check_err(nf90_inq_varid(ncid, trim(ncinhmix_rate_name), hmix_rate_varid))
         case (3) !FVCOM
         continue
@@ -405,12 +406,13 @@
             nyrdays = 365 + merge(1,0,(mod(yeari,4).eq.0))
         end if
         if (yeari.eq.year.and.istart.eq.-1) istart = i    !istart = first index where (yeari==year)
-        if (i-istart.eq.days_in_yr) then
-            iend = i                                      !iend
-            exit
-        end if
-        if (iend.eq.-1.and.i.eq.time_rec) iend = i        !...or the last index in the file
+        !if (i-istart.eq.days_in_yr) then
+        !    iend = i                                      !iend
+        !    exit
+        !end if
+        !if (iend.eq.-1.and.i.eq.time_rec) iend = i        !...or the last index in the file
     end do
+    iend=istart+365
     ni = iend-istart+1
     !select case (nc_file_source) 
 !    case (1,2) !ROMS, GETM
