@@ -565,8 +565,8 @@
 
             !Variations read from ascii file and/or calculated as a function of something
             if (bctype_top(i,ip).eq.4) bc_top(i,ip) = cc_hmix(i,ip,1,julianday)
-            !if (bctype_top(i,ip).eq.4.and.ip.eq.id_SO4) bc_top(i,ip)=(0.1400_rk/96.062_rk)*(s(1,1,julianday)/1.80655_rk)*1.e6_rk
-            !         !SO4 in mmol/m3, SO4/Salt from Morris, A.W. and Riley, J.P.(1966) quoted in Dickson et al.(2007)
+            if (bctype_top(i,ip).eq.4.and.ip.eq.id_SO4) bc_top(i,ip)=(0.1400_rk/96.062_rk)*(s(1,1,julianday)/1.80655_rk)*1.e6_rk
+                     !SO4 in mmol/m3, SO4/Salt from Morris, A.W. and Riley, J.P.(1966) quoted in Dickson et al.(2007)
             !if (bctype_top(i,ip).eq.4.and.ip.eq.id_Alk) bc_top(i,ip)=0.068*s(1,1,julianday)
             !         !Alk in mmol/m3, Alk/Salt from Murray, 2014
           enddo
