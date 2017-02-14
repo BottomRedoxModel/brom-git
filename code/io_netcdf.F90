@@ -177,11 +177,20 @@
     endif
     !use temperature variable to get ids of midpoint depth, time, and possibly lat/lon dimensions
     call check_err(nf90_inquire_variable(ncid, t_varid, dimids = dimids1))
-    if (nc_file_source.ne.3)then
-        ndims = maxloc(dimids1(1:100),1,mask=(dimids1(1:100).gt.0))
-    else
+    !if (nc_file_source.ne.3)then
+    !    ndims = maxloc(dimids1(1:100),1,mask=(dimids1(1:100).gt.0))
+    !else
+    !    ndims = 2
+    !endif
+    select case (nc_file_source) 
+      case (1) !ROMS   
+        ndims = maxloc(dimids1(1:100),1,mask=(dimids1(1:100).gt.0))       
+      case (2) !GETM
+        ndims = 4       
+      case (3) !FVCOM
         ndims = 2
-    endif
+    end select            
+    
     if (ndims.eq.2) write(*,*) "Assuming (temperature,salinity,diffusivity) variables have netCDF dimensions (depth,time)"
     if (ndims.eq.4) write(*,*) "Assuming (temperature,salinity,diffusivity) variables have netCDF dimensions (lon,lat,depth,time) or (lat,lon,depth,time)"
     if (ndims.eq.4) then
