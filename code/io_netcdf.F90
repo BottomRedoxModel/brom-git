@@ -867,11 +867,10 @@
 
 !=======================================================================================================================
     subroutine save_netcdf(i_max, k_max, julianday, cc, t, s, kz, kzti, wti, model, z, hz, Eair, use_Eair, hice, use_hice, &
-        fick_per_day, sink_per_day, ip_sol, ip_par, x, u_x_w)
-
+        fick_per_day, sink_per_day, ip_sol, ip_par, x, u_x_w, i_day)! i_day here = i_day + 1
 
     !Input variables
-    integer, intent(in)                    :: i_max, k_max, julianday, use_Eair, use_hice, ip_sol, ip_par
+    integer, intent(in)                    :: i_max, k_max, julianday, use_Eair, use_hice, ip_sol, ip_par,i_day
     real(rk), dimension(:,:,:), intent(in) :: cc, t, s, kz, kzti, wti, fick_per_day, sink_per_day, u_x_w
     type (type_model), intent(in)          :: model
     real(rk), dimension(:), intent(in)     :: z, hz, Eair, hice, x
@@ -890,13 +889,13 @@
     count_z = k_max
     start_z2 = 1
     count_z2 = k_max+1
-    start_time = julianday
+    start_time = i_day !julianday
     count_time = 1
     start_x = 1
-    count_x = i_max
-    start_cc(1:3) = (/1, 1, julianday/)
+    count_x = i_max !number of columns
+    start_cc(1:3) = (/1, 1, i_day/) !julianday
     count_cc(1:3) = (/i_max, k_max, 1/)
-    start_flux(1:3) = (/1, 1, julianday/)
+    start_flux(1:3) = (/1, 1, i_day/) !julianday
     count_flux(1:3) = (/i_max, k_max+1, 1/)
 
     !At first call only, output depth variable mz = -1*z
@@ -910,8 +909,8 @@
         first = .false.
     end if
 
-    dum(1) = real(julianday)
-
+    dum(1) = real(i_day) !julianday
+ 
     !For all calls output cc, fick, diagnostics and forcings (t,s,kz)
     if (nc_id.ne.-1) then
         call check_err(nf90_put_var(nc_id, time_id, dum, start_time, count_time))
@@ -938,11 +937,11 @@
         call check_err(nf90_put_var(nc_id, w_sol_id, wti(:,:,ip_sol), start_flux, count_flux))
         call check_err(nf90_put_var(nc_id, w_par_id, wti(:,:,ip_par), start_flux, count_flux))
         if (use_Eair.eq.1) then
-            dum(1) = Eair(julianday)
+            dum(1) = Eair(i_day) !julianday
             call check_err(nf90_put_var(nc_id, Eair_id, dum, start_time, count_time))
         end if
         if (use_hice.eq.1) then
-            dum(1) = hice(julianday)
+            dum(1) = hice(i_day) !julianday
             call check_err(nf90_put_var(nc_id, hice_id, dum, start_time, count_time))
         end if
         call check_err(nf90_sync(nc_id))
