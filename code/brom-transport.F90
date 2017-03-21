@@ -428,7 +428,7 @@
                 open(20, file= get_brom_name("hmix_filename_" // trim(par_name(ip))))!'' // hmix_file
                 do k=1,k_wat_bbl
                     do i_day=1,days_in_yr
-                        read(20, *) i_dummy,i_dummy,cc_hmix(i_water,ip,k,i_day) ! NODC data on NO3 (i_max,par_max,k_max,days_in_yr))
+                        read(20, *) i_dummy,i_dummy,cc_hmix(i_water,ip,k,i_day) ! NODC data (i_max,par_max,k_max,days_in_yr))
                     end do
                 end do 
                 close(20)

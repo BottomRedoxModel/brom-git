@@ -206,6 +206,7 @@
           call check_err(nf90_inquire_dimension(ncid, dimids1(idim_z), len = h_rec))
           call check_err(nf90_inquire_dimension(ncid, dimids1(idim_time), len = time_rec))
         case (2) !GETM
+           write(*,*) "Case GETM" 
           idim_time = minloc(dimids1,1,mask=dimids1.eq.time_varid)
           call check_err(nf90_inquire_dimension(ncid, dimids1(3), len = h_rec))
           call check_err(nf90_inquire_dimension(ncid, dimids1(4), len = time_rec))
@@ -223,6 +224,7 @@
     if (ndims.eq.4) then
         idim_lat = minloc(dimids1,1,mask=dimids1.eq.lat_varid)
         idim_lon = minloc(dimids1,1,mask=dimids1.eq.lon_varid)
+        write(*,*) "idim_lon" 
     select case (nc_file_source) 
         case (1) !ROMS
           call check_err(nf90_inquire_dimension(ncid, dimids1(idim_lat), len = lat_rec))
@@ -230,6 +232,7 @@
         case (2) !GETM
           call check_err(nf90_inquire_dimension(ncid, dimids1(1), len = lat_rec))
           call check_err(nf90_inquire_dimension(ncid, dimids1(2), len = lon_rec))
+          write(*,*) "lat_rec" 
         case (3) !FVCOM
           call check_err(nf90_inquire_dimension(ncid, dimids1(idim_lat), len = lat_rec))
           call check_err(nf90_inquire_dimension(ncid, dimids1(idim_lon), len = lon_rec))
@@ -252,16 +255,21 @@
         if (bctype_top(i_water,ip).eq.3) call check_err(nf90_inq_varid(ncid, trim(ncinsurfpar_name(ip)), surf_varid(ip)))
         if (bctype_bottom(i_water,ip).eq.3) call check_err(nf90_inq_varid(ncid, trim(ncinbotpar_name(ip)), bot_varid(ip)))
         
-    select case (nc_file_source) 
-        case (1,2) !ROMS, GETM
-        if (hmixtype(i_water,ip).eq.1) call check_err(nf90_inq_varid(ncid, trim(ncinhmixpar_name(ip)), hmix_varid(ip)))
-        case (3)
-        continue
-    end select
+    !select case (nc_file_source) 
+    !    case (1,2) !ROMS, GETM
+    !    write(*,*) "ncinhmixpar_name" 
+    !    if (hmixtype(i_water,ip).eq.1) then 
+    !        call check_err(nf90_inq_varid(ncid, trim(ncinhmixpar_name(ip)), hmix_varid(ip))) 
+    !        write(*,*) "in"
+    !    end if 
+    !    case (3)
+    !    continue
+    !end select
 
     end do
     select case (nc_file_source) 
-        case (1,2) !ROMS, GETM
+    case (1,2) !ROMS, GETM
+        write(*,*)  'hmixtype'
         if (maxval(hmixtype(i_water,:)).eq.1) call check_err(nf90_inq_varid(ncid, trim(ncinhmix_rate_name), hmix_rate_varid))
         case (3) !FVCOM
         continue
