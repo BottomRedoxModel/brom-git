@@ -782,7 +782,7 @@
     
     if (sediments_units_convert.eq.0) then 
         call save_netcdf(i_max, k_max, julianday, cc, t, s, kz, kzti, wti, model, z, hz, Eair, use_Eair, hice, use_hice, &
-        fick_per_day, sink_per_day, ip_sol, ip_par, x, u_x_w,i_day+1)
+        fick_per_day, sink_per_day, ip_sol, ip_par, x, u_x_w,julianday) ! ( i_day+1)
     else
         !convert into observarional units in the sediments for dissolved (mass/pore water) and solids (mass/mass) with an exception for biota
         cc_out(:,:,:)=cc(:,:,:)
@@ -793,7 +793,7 @@
         enddo
         !cc_out(:,2:k_max,:)=cc_out(:,1:k_max-1,:)   ! shift is needed for plotting with PyNCView
         call save_netcdf(i_max, k_max, julianday, cc_out, t, s, kz, kzti, wti, model, z, hz, Eair, use_Eair, hice, use_hice, &
-        fick_per_day, sink_per_day, ip_sol, ip_par, x, u_x_w,i_day+1)
+        fick_per_day, sink_per_day, ip_sol, ip_par, x, u_x_w,julianday)! ( i_day+1)
     endif
     
     !Save .dat files for plotting with Grapher for Sleipner for days 72 and 240
