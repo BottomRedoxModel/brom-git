@@ -44,7 +44,7 @@
     integer   :: diff_method, kz_bbl_type, bioturb_across_SWI  !vertical diffusivity related
     integer   :: h_adv, h_relax, h_turb  !horizontal transport  (advection and relaxation) switches
     real(rk)  :: K_O2s
-    integer   :: input_type, use_Eair, use_hice, port_initial_state !I/O related
+    integer   :: input_type, use_Eair, use_hice, port_initial_state, ncoutfile_type !I/O related
     character(len=64) :: icfile_name, outfile_name, ncoutfile_name
     character :: hmix_file
     integer   :: k_bbl_sed, k_max          !z-axis related
@@ -125,6 +125,7 @@
     icfile_name = get_brom_name("icfile_name")
     outfile_name = get_brom_name("outfile_name")
     ncoutfile_name = get_brom_name("ncoutfile_name")
+    ncoutfile_type = get_brom_par("ncoutfile_type")    
     K_O2s = get_brom_par("K_O2s")
     h_adv =  get_brom_par("h_adv")
     h_relax =  get_brom_par("h_relax")
@@ -781,8 +782,13 @@
     sink_per_day = 86400.0_rk * sink
     
     if (sediments_units_convert.eq.0) then 
-        call save_netcdf(i_max, k_max, julianday, cc, t, s, kz, kzti, wti, model, z, hz, Eair, use_Eair, hice, use_hice, &
-        fick_per_day, sink_per_day, ip_sol, ip_par, x, u_x_w,julianday) ! ( i_day+1)
+        if (ncoutfile_type == 1) then
+            call save_netcdf(i_max, k_max, julianday, cc, t, s, kz, kzti, wti, model, z, hz, Eair, use_Eair, hice, use_hice, &
+            fick_per_day, sink_per_day, ip_sol, ip_par, x, u_x_w,(i_day+1))  
+        else if (ncoutfile_type == 0) then
+            call save_netcdf(i_max, k_max, julianday, cc, t, s, kz, kzti, wti, model, z, hz, Eair, use_Eair, hice, use_hice, &
+            fick_per_day, sink_per_day, ip_sol, ip_par, x, u_x_w, julianday)          
+        endif    
     else
         !convert into observarional units in the sediments for dissolved (mass/pore water) and solids (mass/mass) with an exception for biota
         cc_out(:,:,:)=cc(:,:,:)
@@ -792,15 +798,20 @@
             endif
         enddo
         !cc_out(:,2:k_max,:)=cc_out(:,1:k_max-1,:)   ! shift is needed for plotting with PyNCView
-        call save_netcdf(i_max, k_max, julianday, cc_out, t, s, kz, kzti, wti, model, z, hz, Eair, use_Eair, hice, use_hice, &
-        fick_per_day, sink_per_day, ip_sol, ip_par, x, u_x_w,julianday)! ( i_day+1)
+        if (ncoutfile_type.eq.1) then
+            call save_netcdf(i_max, k_max, julianday, cc_out, t, s, kz, kzti, wti, model, z, hz, Eair, use_Eair, hice, use_hice, &
+            fick_per_day, sink_per_day, ip_sol, ip_par, x, u_x_w,(i_day+1))! 
+        else if (ncoutfile_type.eq.0) then
+             call save_netcdf(i_max, k_max, julianday, cc_out, t, s, kz, kzti, wti, model, z, hz, Eair, use_Eair, hice, use_hice, &
+            fick_per_day, sink_per_day, ip_sol, ip_par, x, u_x_w,julianday)! 
+        endif 
     endif
     
     !Save .dat files for plotting with Grapher for Sleipner for days 72 and 240
     !Note: saving to ascii every day causes an appreciable decrease in speed of execution
-    !if (julianday == 365) then
-    !    call saving_state_variables(trim(outfile_name), model_year, julianday, i_max, k_max, par_max, par_name, z, hz, cc, vv, t, s, kz)
-    !endif
+    if (julianday == 365) then
+        call saving_state_variables(trim(outfile_name), model_year, julianday, i_max, k_max, par_max, par_name, z, hz, cc, vv, t, s, kz)
+    endif
     
     !Write daily output to screen if required
     do i=i_min,i_water
