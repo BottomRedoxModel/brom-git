@@ -425,7 +425,7 @@
             if (hmixtype(i_water,ip).eq.2) then
     !            hmix_file = get_brom_name("hmix_filename_" // trim(par_name(ip)(13:))) !niva_oxydep_NUT
                 write(*,*) "Horizontal relaxation (ASCII) assumed for " // trim(par_name(ip))
-            else if (bctype_top(i_water,ip).eq.4.or.hmixtype(i_water,ip).eq.2) then  ! read relaxation files in two cases, also for top bondary condition    
+            else if (hmixtype(i_water,ip).eq.2) then  ! read relaxation files in two cases, also for top bondary condition  #bctype_top(i_water,ip).eq.4.or.  
                 open(20, file= get_brom_name("hmix_filename_" // trim(par_name(ip))))!'' // hmix_file
                 do k=1,k_wat_bbl
                     do i_day=1,days_in_yr
@@ -435,6 +435,16 @@
                 close(20)
                 do i=i_min,i_water-1
                     cc_hmix(i,:,:,:)=cc_hmix(i_water,:,:,:)
+                enddo
+               
+            else if (bctype_top(i_water,ip).eq.4.) then    
+                open(40, file = get_brom_name("bc_top_filename_" // trim(par_name(ip)))) !to boundary condition file  
+                do i_day=1,days_in_yr
+                    read(40, *) cc_top(i,ip,i_day)
+                end do   
+                close(40)
+                do i=i_min,i_water-1
+                    cc_top(i,:,:)=cc_top(i_water,:,:)
                 enddo
             end if
         end do
@@ -470,7 +480,7 @@
     integer      :: show_maxmin, show_kztCFL, show_wCFL, show_nan, show_nan_kztCFL, show_nan_wCFL     !options for runtime output to screen
     integer      :: bc_units_convert, sediments_units_convert !options for conversion of concentrations units in the sediment 
     integer      :: julianday, model_year
-    integer      :: k_inj,i_inj,inj_swith,inj_num    !#number of layer and column to inject into
+    integer      :: k_inj,i_inj,inj_swith,inj_num,start_inj,stop_inj    !#number of layer and column to inject into, start day, stop day number 
     real(rk)     :: cnpar                            !"Implicitness" parameter for GOTM vertical diffusion (set in brom.yaml)
     real(rk)     :: cc0                              !Resilient concentration (same for all variables)
     real(rk)     :: omega                            !angular frequency of sinusoidal forcing = 2*pi/365 rads/day
@@ -557,11 +567,11 @@
                 !Variations read from netcdf
                 if (bctype_top(i,ip).eq.3) bc_top(i,ip) = cc_top(i,ip,julianday)
                 if (bctype_bottom(i,ip).eq.3) bc_bottom(i,ip) = cc_bottom(i,ip,julianday)
-                
-                !Variations read from ascii file and/or calculated as a function of something
-                if (bctype_top(i,ip).eq.4) then                                
-                    bc_top(i,ip) = cc_hmix(i,ip,1,julianday)
-                end if 
+               
+                !Variations read from ascii file 
+                if (bctype_top(i,ip).eq.4) then             
+                    bc_top(i,ip) = cc_top(1,ip,julianday) !cc_hmix(i,ip,1,julianday)
+                end if                 
                 
                 !SO4 in mmol/m3, SO4/Salt from Morris, A.W. and Riley, J.P.(1966) quoted in Dickson et al.(2007)              
                 if (bctype_top(i,ip).eq.5) bc_top(i,ip)=(0.1400_rk/96.062_rk)*(s(1,1,julianday)/1.80655_rk)*1.e6_rk !.and.ip.eq.id_SO4
@@ -726,17 +736,22 @@
     
         !________Injection____________________!
         !            !Source of "acetate" 1292 mmol/sec, should be devided to the volume of the grid cell, i.e. dz(k)*dx(i)*dx(i)
+
         if (inj_swith.eq.1)  then
-            do ip = 1, par_max
-                !do while ((par_name(ip).eq.get_brom_name("inj_var_name"))) 
-                if (par_name(ip).eq.get_brom_name("inj_var_name")) exit 
-                inj_num = ip+1           
-            end do 
-            !print *, "injection num", inj_num
-            cc(i_inj,k_inj,inj_num)=cc(i_inj,k_inj,inj_num)+86400.0_rk*dt*injection_rate/(dx(i_inj)*dx(i_inj)*dz(k_inj))
-            !cc(:,k_inj,2)=cc(:,k_inj,4)+86400.0_rk*dt*10000./(dx(i_inj)*dx(i_inj)*dz(k_inj))    
-            !cc(:,k_inj,inj_num)=cc(:,k_inj,inj_num)+86400.0_rk*dt*injection_rate/(dx(i_inj)*dx(i_inj)*dz(k_inj))          
-        end if            
+            start_inj = get_brom_par("start_inj")
+            stop_inj = get_brom_par("stop_inj")
+            if (i_day.gt.start_inj.and.i_day.le.stop_inj) then
+                do ip = 1, par_max
+                    !do while ((par_name(ip).eq.get_brom_name("inj_var_name"))) 
+                    if (par_name(ip).eq.get_brom_name("inj_var_name")) exit 
+                    inj_num = ip+1           
+                end do 
+                !print *, "injection num", inj_num
+                cc(i_inj,k_inj,inj_num)=cc(i_inj,k_inj,inj_num)+86400.0_rk*dt*injection_rate/(dx(i_inj)*dx(i_inj)*dz(k_inj))
+                !cc(:,k_inj,2)=cc(:,k_inj,4)+86400.0_rk*dt*10000./(dx(i_inj)*dx(i_inj)*dz(k_inj))    
+                !cc(:,k_inj,inj_num)=cc(:,k_inj,inj_num)+86400.0_rk*dt*injection_rate/(dx(i_inj)*dx(i_inj)*dz(k_inj))          
+            end if 
+        end if
     
         !________Check for NaNs (stopping if any found)____________________!
         do ip=1,par_max
