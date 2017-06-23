@@ -53,7 +53,7 @@
     !Forcings to be provided to FABM: These must have the POINTER attribute
     real(rk), pointer, dimension(:)            :: pco2atm, windspeed, hice
     real(rk), pointer, dimension(:,:)          :: surf_flux, bott_flux, bott_source, Izt, pressure
-    real(rk), pointer, dimension(:,:,:)        :: t, s
+    real(rk), pointer, dimension(:,:,:)        :: t, s, u_x
     real(rk), pointer, dimension(:,:,:)        :: vv, dvv, cc, cc_out, dcc, dcc_R, wbio
 
     !Surface and bottom forcings, used within brom-transport only
@@ -198,8 +198,14 @@
         else if (bctype_bottom(i_water,ip).eq.3) then  !Read from netcdf
             write(*,*) "NetCDF specified Dirichlet lower boundary condition for " // trim(par_name(ip))
         end if
-        bctype_top(:,ip)=bctype_top(i_water,ip)
-        bctype_bottom(:,ip)=bctype_bottom(i_water,ip)
+        bctype_top(:,ip) = bctype_top(i_water,ip)
+        bc_top(:,ip) = bc_top(i_water,ip)
+        bctype_bottom(:,ip) = bctype_bottom(i_water,ip)
+        bc_bottom(:,ip) = bc_bottom(i_water,ip)
+        do k=1,3
+          bcpar_top(:,ip,k) = bcpar_top(i_water,ip,k)
+          bcpar_bottom(:,ip,k) = bcpar_bottom(i_water,ip,k)
+        enddo
     end do
     
     write(*,*) "All other boundary conditions use surface and bottom fluxes from FABM"
@@ -246,6 +252,7 @@
     allocate(s(i_max,k_max,days_in_yr))
     allocate(kz(i_max,k_max+1,days_in_yr))
     allocate(hmix_rate(i_max,k_max,days_in_yr))
+    allocate(u_x(i_max,k_max,days_in_yr))
     allocate(cc_hmix(i_max,par_max,k_max,days_in_yr))
     allocate(kz_mol(i_max,k_max+1,par_max))
     allocate(kz_bio(i_max,k_max+1))
@@ -396,21 +403,12 @@
 
     !Complete hydrophysical forcings
     cc_hmix=0.0_rk
-    do i=i_min,i_water
-      call make_physics_bbl_sed(t, s, kz, hmix_rate, cc_hmix, t_w, s_w, kz_w, hmix_rate_w, cc_hmix_w, kz_mol, kz_bio, &
-        z, dz, hz, i_min, i_max, i, k_wat_bbl, k_bbl_sed, k_max, par_max, days_in_yr, alpha, is_solid, phi, phi1, phi_inv, &
+    call make_physics_bbl_sed(t, s, kz, hmix_rate, cc_hmix, u_x, u_x_w, t_w, s_w, kz_w, hmix_rate_w, cc_hmix_w, kz_mol, kz_bio, &
+        z, dz, hz, i_min, i_max, i_water, k_wat_bbl, k_bbl_sed, k_max, par_max, days_in_yr, alpha, is_solid, phi, phi1, phi_inv, &
         pF1, pF2, mu0_musw, tortuosity, w_b, u_b, rho, dt, freq_turb, par_name, diff_method, bioturb_across_SWI, &
         ip_sol, ip_par, dphidz_SWI, wat_content, pWC)
-    enddo
-    do i = i_min, i_water
-       t(i,:,:)  = t(i_water,:,:)
-       s(i,:,:)  = s(i_water,:,:)
-       kz(i,:,:) = kz(i_water,:,:)
-    enddo
-    
+
     write(*,*) "Made physics of BBL, sediments"
-    
-    cc_hmix=0.0_rk
 
     !if(h_relax.eq.1.) then   
     !Get horizontal relaxation parameters from brom.yaml:
@@ -425,8 +423,9 @@
             if (hmixtype(i_water,ip).eq.2) then
     !            hmix_file = get_brom_name("hmix_filename_" // trim(par_name(ip)(13:))) !niva_oxydep_NUT
                 write(*,*) "Horizontal relaxation (ASCII) assumed for " // trim(par_name(ip))
-            else if (hmixtype(i_water,ip).eq.2) then  ! read relaxation files in two cases, also for top bondary condition  #bctype_top(i_water,ip).eq.4.or.  
+            !else if (hmixtype(i_water,ip).eq.2) then  ! read relaxation files in two cases, also for top bondary condition  #bctype_top(i_water,ip).eq.4.or.  
                 open(20, file= get_brom_name("hmix_filename_" // trim(par_name(ip))))!'' // hmix_file
+                write(*,*) ("hmix_filename_" // trim(par_name(ip)))
                 do k=1,k_wat_bbl
                     do i_day=1,days_in_yr
                         read(20, *) i_dummy,i_dummy,cc_hmix(i_water,ip,k,i_day) ! NODC data (i_max,par_max,k_max,days_in_yr))
@@ -450,6 +449,7 @@
         end do
     !endif
     
+    open(8,FILE = 'temp.dat')
     !Set constant forcings
     wind_speed = get_brom_par("wind_speed")    ! 10m wind speed [m s-1]
     pco2_atm   = get_brom_par("pco2_atm")      ! CO2 partical pressure [ppm]
@@ -469,14 +469,16 @@
 
     !Executes the offline vertical transport model BROM-transport
 
-    use calculate, only: calculate_light, calculate_phys, calculate_sed
+    use calculate, only: calculate_light, calculate_phys, calculate_sed, calculate_sed_eya
 
     implicit none
 
     integer      :: id, idt, idf                     !time related
     integer      :: surf_flux_with_diff              !1 to include surface fluxes in diffusion update, 0 to include in bgc update
     integer      :: bott_flux_with_diff              !1 to include bottom fluxes in diffusion update, 0 to include in bgc update
-    integer      :: dynamic_w_sed                    !1 to assume dynamic advection velocities in the sediments
+    integer      :: model_w_sed                      !1 to assume porosity effects for solutes and solids, 0 - sumplified approach
+    integer      :: constant_w_sed                   !1 to assume constant burial (advection) velocities in the sediments
+    integer      :: dynamic_w_sed                    !1 to assume dynamic burial (advection) velocities in the sediments depending on dVV(k_bbl_sed)
     integer      :: show_maxmin, show_kztCFL, show_wCFL, show_nan, show_nan_kztCFL, show_nan_wCFL     !options for runtime output to screen
     integer      :: bc_units_convert, sediments_units_convert !options for conversion of concentrations units in the sediment 
     integer      :: julianday, model_year
@@ -487,7 +489,11 @@
     real(rk)     :: O2stat                           !oxygen status of sediments (factor modulating the bioirrigation rate)
     real(rk)     :: a1_bioirr                        !to detect whether or not bioirrigation is activated
     real(rk)     :: hmix_rate_uniform                !uniform horizontal relaxation if prescribed
-    real(rk)     :: injection_rate
+    real(rk)     :: fresh_PM_poros                   ! porosity of fresh precipitated PM (i.e. dVV) 
+    real(rk)     :: w_binf                   ! 
+    real(rk)     :: bu_co                   ! "Burial coeficient" for setting velosity exactly to the SWI proportional to the 
+                                           !   settling velocity in the water column (0<bu_co<1), 0 - for no setting velosity, (nd)
+    real(rk)     :: injection_rate                   ! injection rate
     real(rk), parameter :: pi=3.141592653589793_rk
     character(len=attribute_length), allocatable, dimension(:)    :: inj_var_name
     
@@ -495,7 +501,12 @@
 
     !Get parameters for the time-stepping and vertical diffusion / sedimentation
     cnpar = get_brom_par("cnpar")
+    model_w_sed = get_brom_par("model_w_sed")
     dynamic_w_sed = get_brom_par("dynamic_w_sed")
+    constant_w_sed = get_brom_par("constant_w_sed")
+    fresh_PM_poros = get_brom_par("fresh_PM_poros")
+    w_binf = get_brom_par("w_binf")
+    bu_co = get_brom_par("bu_co")
     cc0 = get_brom_par("cc0")
     a1_bioirr = get_brom_par("a1_bioirr")
     surf_flux_with_diff = get_brom_par("surf_flux_with_diff")
@@ -513,11 +524,13 @@
     k_inj = get_brom_par("k_injection") 
     i_inj = get_brom_par("i_injection") 
     inj_swith = get_brom_par("injection_swith")
+    start_inj = get_brom_par("start_inj")
+    stop_inj = get_brom_par("stop_inj")    
     idt = int(1._rk/dt)                                      !number of cycles per day
     model_year = 0
     kzti = 0.0_rk
 
-    
+    dVV = 0.0_rk
   
         !convert bottom boundary values from 'mass/pore water ml' for dissolved and 'mass/mass' for solids into 'mass/total volume'
     if (bc_units_convert.eq.1) then
@@ -567,11 +580,11 @@
                 !Variations read from netcdf
                 if (bctype_top(i,ip).eq.3) bc_top(i,ip) = cc_top(i,ip,julianday)
                 if (bctype_bottom(i,ip).eq.3) bc_bottom(i,ip) = cc_bottom(i,ip,julianday)
-               
-                !Variations read from ascii file 
-                if (bctype_top(i,ip).eq.4) then             
-                    bc_top(i,ip) = cc_top(1,ip,julianday) !cc_hmix(i,ip,1,julianday)
-                end if                 
+                
+                !Variations read from ascii file and/or calculated as a function of something
+                if (bctype_top(i,ip).eq.4) then                                
+                    bc_top(i,ip) = cc_hmix(i,ip,1,julianday)
+                end if 
                 
                 !SO4 in mmol/m3, SO4/Salt from Morris, A.W. and Riley, J.P.(1966) quoted in Dickson et al.(2007)              
                 if (bctype_top(i,ip).eq.5) bc_top(i,ip)=(0.1400_rk/96.062_rk)*(s(1,1,julianday)/1.80655_rk)*1.e6_rk !.and.ip.eq.id_SO4
@@ -585,12 +598,19 @@
         !numerically more demanding than the biogeochemistry (hence freq_turb, freq_sed >= 1) (Butenschon et al., 2012)
         
         do id=1,idt
-            
+            dVV(:,:,1)=0.0
         !_______vertical diffusion________!
             do i=i_min, i_water
                 call calculate_phys(i, k_max, par_max, model, cc, kzti, fick, dcc, bctype_top, bctype_bottom, bc_top, bc_bottom, &
                     surf_flux, bott_flux, bott_source, k_bbl_sed, dz, hz, kz, kz_mol, kz_bio, julianday, id_O2, K_O2s, dt, freq_turb, &
                     diff_method, cnpar, surf_flux_with_diff,bott_flux_with_diff, bioturb_across_SWI, pF1, pF2, phi_inv, is_solid, cc0)
+                                
+                    k=k_bbl_sed
+                do ip=1,par_max !Sum over contributions from each particulate variable
+                    if (is_solid(ip).eq.1) then
+                        dVV(i,k,1)= dVV(i,k,1)+(fick(i,k,ip)-fick(i,k,ip))/rho(ip) ! dcc(i,k-1,ip)/rho(ip) should be 
+                    endif
+                enddo
             enddo
 
         !_______bioirrigation_____________!
@@ -668,15 +688,34 @@
                 end if
             end do
             cc(i,:,:) = max(cc0, cc(i,:,:)) !Impose resilient concentration
+            enddo
+        !_______Calculate changes of volumes of cells_________!
+        do i=i_min, i_water
+            k=k_bbl_sed
+           do ip=1,par_max !Sum over contributions from each particulate variable
+              if (is_solid(ip).eq.1) then
+              !change of Volume of a cell as a function of biology and sinking
+                dVV(i,k,1)= dVV(i,k,1)+(dcc_R(i,k,ip)+sink(i,k-1,ip))/rho(ip)
+!               dVV(i,k,1)= dVV(i,k,1)+(dcc_R(i,k,ip)+sink(i,k-1,ip)-sink(i,k,ip))/rho(ip)
+              end if
+           end do
         enddo
-         
+       if (id.eq.1) write (8,'(a, i4, a, i4, a, e)') " model year:", model_year, "; julianday:", julianday, "; dVV(k_bbl_sed):", dVV(1,k_bbl_sed,1)
         !_______Particles sinking_________!
         do i=i_min, i_water
-            call calculate_sed(i, k_max, par_max, model, cc, wti, sink, dcc, dcc_R, bctype_top, bctype_bottom, &
-            bc_top, bc_bottom, hz, dz, k_bbl_sed, wbio, w_b, u_b, julianday, dt, freq_sed, dynamic_w_sed, is_solid, &
-            rho, phi1, fick, k_sed1, K_O2s, kz_bio, id_O2, dphidz_SWI, cc0, bott_flux, bott_source)
+            if(model_w_sed.ge.1) then
+                call calculate_sed(i, k_max, par_max, model, cc, wti, sink, dcc, dcc_R, bctype_top, bctype_bottom, &
+                bc_top, bc_bottom, hz, dz, k_bbl_sed, wbio, w_b, u_b, julianday, dt, freq_sed, dynamic_w_sed, is_solid, &
+                rho, phi1, fick, k_sed1, K_O2s, kz_bio, id_O2, dphidz_SWI, cc0, bott_flux, bott_source)
+            else
+                call calculate_sed_eya(i, k_max, par_max, model, cc, wti, &
+                sink, dcc, dVV,bctype_top, bctype_bottom, bc_top, &
+                bc_bottom, hz, dz, k_bbl_sed, wbio, w_b, u_b, julianday, &
+                dt, freq_sed, dynamic_w_sed, constant_w_sed, is_solid, &
+                rho, phi1, fick, k_sed1, K_O2s, kz_bio, fresh_PM_poros, &
+                id_O2, dphidz_SWI, cc0, bott_flux, bott_source, w_binf, bu_co)
+            endif
         enddo
-    
         !________Horizontal relaxation_________!
         if (h_relax.eq.1) then          
             dcc = 0.0_rk
@@ -684,7 +723,7 @@
                 do ip=1,par_max
                     if  (hmixtype(i,ip).ge.1) then
                         !Calculate tendency dcc (water column only)
-                        dcc(i,:,ip) = hmix_rate(i,:,julianday)*2.0_rk*(cc_hmix(i,ip,:,julianday)-cc(i,:,ip))/dx(i)/dx(i)
+                        dcc(i,:,ip) = 0.5 * hmix_rate(i,:,julianday)*2.0_rk*(cc_hmix(i,ip,:,julianday)-cc(i,:,ip))/dx(i)/dx(i)
                         !Update concentration (water column only)
                         do k=1,k_max
                             cc(i,k,ip) = cc(i,k,ip) + dt*dcc(i,k,ip)
@@ -718,13 +757,13 @@
             dcc = 0.0_rk
             do ip=1,par_max
                 do i=i_min+1, i_water-1
-                    dcc(i,:,ip) = max(0.0_rk, u_x_w(i,:,julianday))*(cc(i-1,:,ip)-cc(i,:,ip))/dx(i)  &
-                                + max(0.0_rk,-u_x_w(i,:,julianday))*(cc(i+1,:,ip)-cc(i,:,ip))/dx(i)                
+                    dcc(i,:,ip) = max(0.0_rk, u_x(i,:,julianday))*(cc(i-1,:,ip)-cc(i,:,ip))/dx(i)  &
+                                + max(0.0_rk,-u_x(i,:,julianday))*(cc(i+1,:,ip)-cc(i,:,ip))/dx(i)                
                 end do
-                dcc(i_min,:,ip) = max(0.0_rk,u_x_w(i_min,:,julianday))*(cc(i_water,:,ip)-cc(i_min,:,ip))/dx(i_min)  &
-                       + max(0.0_rk,-u_x_w(i_min,:,julianday))*(cc(i_min+1,:,ip)-cc(i_min,:,ip))/dx(i_min)
-                dcc(i_water,:,ip) = max(0.0_rk,u_x_w(i_water,:,julianday))*(cc(i_water-1,:,ip)-cc(i_water,:,ip))/dx(i_water)  &
-                       + max(0.0_rk,-u_x_w(i_water,:,julianday))*(cc(i_min,:,ip)-cc(i_water,:,ip))/dx(i_water)
+                dcc(i_min,:,ip) = max(0.0_rk,u_x(i_min,:,julianday))*(cc(i_water,:,ip)-cc(i_min,:,ip))/dx(i_min)  &
+                       + max(0.0_rk,-u_x(i_min,:,julianday))*(cc(i_min+1,:,ip)-cc(i_min,:,ip))/dx(i_min)
+                dcc(i_water,:,ip) = max(0.0_rk,u_x(i_water,:,julianday))*(cc(i_water-1,:,ip)-cc(i_water,:,ip))/dx(i_water)  &
+                       + max(0.0_rk,-u_x(i_water,:,julianday))*(cc(i_min,:,ip)-cc(i_water,:,ip))/dx(i_water)
                 do i=i_min, i_water
                     do k=1,k_max
                         cc(i,k,ip) = cc(i,k,ip) + dt*dcc(i,k,ip) !Simple Euler time step
@@ -737,14 +776,12 @@
         !________Injection____________________!
         !            !Source of "acetate" 1292 mmol/sec, should be devided to the volume of the grid cell, i.e. dz(k)*dx(i)*dx(i)
 
-        if (inj_swith.eq.1)  then
-            start_inj = get_brom_par("start_inj")
-            stop_inj = get_brom_par("stop_inj")
-            if (i_day.gt.start_inj.and.i_day.le.stop_inj) then
+        if (i_day.gt.start_inj.and.i_day.le.stop_inj) then
+            if (inj_swith.eq.1)  then
                 do ip = 1, par_max
                     !do while ((par_name(ip).eq.get_brom_name("inj_var_name"))) 
                     if (par_name(ip).eq.get_brom_name("inj_var_name")) exit 
-                    inj_num = ip+1           
+                    inj_num = ip!+1           
                 end do 
                 !print *, "injection num", inj_num
                 cc(i_inj,k_inj,inj_num)=cc(i_inj,k_inj,inj_num)+86400.0_rk*dt*injection_rate/(dx(i_inj)*dx(i_inj)*dz(k_inj))
@@ -795,15 +832,55 @@
     !Save output to netcdf every day
     fick_per_day = 86400.0_rk * fick
     sink_per_day = 86400.0_rk * sink
+    !!!
+    !!!if (sediments_units_convert.eq.0) then 
+    !!!    if (ncoutfile_type == 1) then
+    !!!        call save_netcdf(i_max, k_max, julianday, cc, t, s, kz, kzti, wti, model, z, hz, Eair, use_Eair, hice, use_hice, &
+    !!!        fick_per_day, sink_per_day, ip_sol, ip_par, x, u_x_w,(i_day+1))  
+    !!!    else if (ncoutfile_type == 0) then
+    !!!        call save_netcdf(i_max, k_max, julianday, cc, t, s, kz, kzti, wti, model, z, hz, Eair, use_Eair, hice, use_hice, &
+    !!!        fick_per_day, sink_per_day, ip_sol, ip_par, x, u_x_w, julianday)          
+    !!!    endif    
+    !!!else
+    !!!    !convert into observarional units in the sediments for dissolved (mass/pore water) and solids (mass/mass) with an exception for biota
+    !!!    cc_out(:,:,:)=cc(:,:,:)
+    !!!    do ip=1,par_max
+    !!!        if (ip.ne.id_Phy.or.ip.ne.id_Het.or.ip.ne.id_Baae.or.ip.ne.id_Baan.or.ip.ne.id_Bhae.or.ip.ne.id_Bhan) then 
+    !!!            cc_out(:,k_bbl_sed+1:k_max,:)=cc(:,k_bbl_sed+1:k_max,:)*pF1(:,k_bbl_sed:k_max-1,:)
+    !!!        endif
+    !!!    enddo
+    !!!    !cc_out(:,2:k_max,:)=cc_out(:,1:k_max-1,:)   ! shift is needed for plotting with PyNCView
+    !!!    if (ncoutfile_type.eq.1) then
+    !!!        call save_netcdf(i_max, k_max, julianday, cc_out, t, s, kz, kzti, wti, model, z, hz, Eair, use_Eair, hice, use_hice, &
+    !!!        fick_per_day, sink_per_day, ip_sol, ip_par, x, u_x_w,(i_day+1))! 
+    !!!    else if (ncoutfile_type.eq.0) then
+    !!!         call save_netcdf(i_max, k_max, julianday, cc_out, t, s, kz, kzti, wti, model, z, hz, Eair, use_Eair, hice, use_hice, &
+    !!!        fick_per_day, sink_per_day, ip_sol, ip_par, x, u_x_w,julianday)! 
+    !!!    endif 
+    !!!endif
+    !!!
+    !!!!Save .dat files for plotting with Grapher for Sleipner for days 72 and 240
+    !!!!Note: saving to ascii every day causes an appreciable decrease in speed of execution
+    !!!if (julianday == 365) then
+    !!!    call saving_state_variables(trim(outfile_name), model_year, julianday, i_max, k_max, par_max, par_name, z, hz, cc, vv, t, s, kz)
+    !!!endif
+    !!!
+    !!!
+    !!!
     
+!!!    if (julianday.eq.364) pause 1
+
+
     if (sediments_units_convert.eq.0) then 
+
         if (ncoutfile_type == 1) then
-            call save_netcdf(i_max, k_max, julianday, cc, t, s, kz, kzti, wti, model, z, hz, Eair, use_Eair, hice, use_hice, &
-            fick_per_day, sink_per_day, ip_sol, ip_par, x, u_x_w,(i_day+1))  
-        else if (ncoutfile_type == 0) then
-            call save_netcdf(i_max, k_max, julianday, cc, t, s, kz, kzti, wti, model, z, hz, Eair, use_Eair, hice, use_hice, &
-            fick_per_day, sink_per_day, ip_sol, ip_par, x, u_x_w, julianday)          
-        endif    
+            call save_netcdf(i_max, k_max, max(1,julianday), cc, t, s, kz, kzti, wti, model, z, hz, Eair, use_Eair, hice, use_hice, &
+            fick_per_day, sink_per_day, ip_sol, ip_par, x, u_x, i_day+1)
+        else
+            call save_netcdf(i_max, k_max, max(1,julianday), cc, t, s, kz, kzti, wti, model, z, hz, Eair, use_Eair, hice, use_hice, &
+            fick_per_day, sink_per_day, ip_sol, ip_par, x, u_x, julianday)
+        endif
+
     else
         !convert into observarional units in the sediments for dissolved (mass/pore water) and solids (mass/mass) with an exception for biota
         cc_out(:,:,:)=cc(:,:,:)
@@ -811,20 +888,22 @@
             if (ip.ne.id_Phy.or.ip.ne.id_Het.or.ip.ne.id_Baae.or.ip.ne.id_Baan.or.ip.ne.id_Bhae.or.ip.ne.id_Bhan) then 
                 cc_out(:,k_bbl_sed+1:k_max,:)=cc(:,k_bbl_sed+1:k_max,:)*pF1(:,k_bbl_sed:k_max-1,:)
             endif
-        enddo
-        !cc_out(:,2:k_max,:)=cc_out(:,1:k_max-1,:)   ! shift is needed for plotting with PyNCView
-        if (ncoutfile_type.eq.1) then
-            call save_netcdf(i_max, k_max, julianday, cc_out, t, s, kz, kzti, wti, model, z, hz, Eair, use_Eair, hice, use_hice, &
-            fick_per_day, sink_per_day, ip_sol, ip_par, x, u_x_w,(i_day+1))! 
-        else if (ncoutfile_type.eq.0) then
-             call save_netcdf(i_max, k_max, julianday, cc_out, t, s, kz, kzti, wti, model, z, hz, Eair, use_Eair, hice, use_hice, &
-            fick_per_day, sink_per_day, ip_sol, ip_par, x, u_x_w,julianday)! 
-        endif 
+        enddo 
+
+        if (ncoutfile_type == 1) then
+            call save_netcdf(i_max, k_max, max(1,julianday), cc_out, t, s, kz, kzti, wti, model, z, hz, Eair, use_Eair, hice, use_hice, &
+            fick_per_day, sink_per_day, ip_sol, ip_par, x, u_x, i_day+1)
+        else
+            call save_netcdf(i_max, k_max, max(1,julianday), cc_out, t, s, kz, kzti, wti, model, z, hz, Eair, use_Eair, hice, use_hice, &
+            fick_per_day, sink_per_day, ip_sol, ip_par, x, u_x, julianday)
+        endif        
+
     endif
-    
+
     !Save .dat files for plotting with Grapher for Sleipner for days 72 and 240
     !Note: saving to ascii every day causes an appreciable decrease in speed of execution
-    if (julianday == 365) then
+    if (julianday == 364) then
+        vv=1._rk
         call saving_state_variables(trim(outfile_name), model_year, julianday, i_max, k_max, par_max, par_name, z, hz, cc, vv, t, s, kz)
     endif
     
@@ -889,6 +968,7 @@
     deallocate(hz)
     deallocate(t)
     deallocate(s)
+    deallocate(u_x)
     deallocate(kz)
     deallocate(hmix_rate)
     deallocate(cc_hmix)

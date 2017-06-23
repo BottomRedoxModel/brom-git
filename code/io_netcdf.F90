@@ -32,7 +32,7 @@
     integer, allocatable  :: parameter_id_diag(:)
     !parameter_ids
     integer               :: i_id, z_id, z2_id, time_id, Eair_id, hice_id
-    integer               :: pH_id, T_id, S_id, Kz_id, Kz_sol_id, Kz_par_id, w_sol_id, w_par_id, u_x_w_id
+    integer               :: pH_id, T_id, S_id, Kz_id, Kz_sol_id, Kz_par_id, w_sol_id, w_par_id, u_x_id
     integer               :: pCO2_id, Om_Ca_id, Om_Ar_id
 
     logical               :: first
@@ -79,7 +79,7 @@
     integer, dimension(nf90_max_var_dims)       :: dimids1, dimids2
     integer, dimension(par_max)                 :: surf_varid, bot_varid, hmix_varid
     integer, allocatable, dimension(:)          :: inds, inds2
-    real(rk), allocatable, dimension(:)         :: z_w2, z_w_error, time_temp, Eair_temp, hice_temp, z_temp, z_temp2
+    real(rk), allocatable, dimension(:)         :: z_w2, z_w_error, time_temp, Eair_temp, hice_temp, z_temp, z_temp2, dens
     real(rk), allocatable, dimension(:,:)       :: t_temp, s_temp, kz_temp, u_temp, v_temp
     real(rk), allocatable, dimension(:,:,:)     :: Eair_temp2, hice_temp2
     real(rk), allocatable, dimension(:,:,:,:)   :: t_temp2, s_temp2, kz_temp2
@@ -167,14 +167,15 @@
     call check_err(nf90_open(trim(ncinfile_name), NF90_NOWRITE, ncid))
     call check_err(nf90_inq_varid(ncid, trim(ncint_name), t_varid))
     call check_err(nf90_inq_varid(ncid, trim(ncins_name), s_varid))
-    call check_err(nf90_inq_varid(ncid, trim(ncinkz_name), kz_varid))
     call check_err(nf90_inq_varid(ncid, trim(ncinz_name), z_varid))
-    call check_err(nf90_inq_varid(ncid, trim(ncinz2_name), z2_varid))
     call check_err(nf90_inq_varid(ncid, trim(ncintime_name), time_varid))
-    if (h_adv.ne.0)then
+!""    call check_err(nf90_inq_varid(ncid, trim(ncinkz_name), kz_varid))
+    call check_err(nf90_inq_varid(ncid, trim(ncinz2_name), z2_varid))
+
+!""    if (h_adv.ne.0)then
     call check_err(nf90_inq_varid(ncid, 'u', u_varid))
     call check_err(nf90_inq_varid(ncid, 'v', v_varid))
-    endif
+!""    endif
     !use temperature variable to get ids of midpoint depth, time, and possibly lat/lon dimensions
     call check_err(nf90_inquire_variable(ncid, t_varid, dimids = dimids1))
     !if (nc_file_source.ne.3)then
@@ -185,6 +186,7 @@
     select case (nc_file_source) 
       case (1) !ROMS   
         ndims = maxloc(dimids1(1:100),1,mask=(dimids1(1:100).gt.0))       
+        ndims = 2 !(for Hardangerfjord)
       case (2) !GETM
         ndims = 4       
       case (3) !FVCOM
@@ -206,7 +208,6 @@
           call check_err(nf90_inquire_dimension(ncid, dimids1(idim_z), len = h_rec))
           call check_err(nf90_inquire_dimension(ncid, dimids1(idim_time), len = time_rec))
         case (2) !GETM
-           write(*,*) "Case GETM" 
           idim_time = minloc(dimids1,1,mask=dimids1.eq.time_varid)
           call check_err(nf90_inquire_dimension(ncid, dimids1(3), len = h_rec))
           call check_err(nf90_inquire_dimension(ncid, dimids1(4), len = time_rec))
@@ -216,15 +217,15 @@
           call check_err(nf90_inquire_dimension(ncid, dimids1(idim_time), len = time_rec))
     end select
     !use diffusivity variable to get length of second input depth variable (possibly same as first)
-    call check_err(nf90_inquire_variable(ncid, kz_varid, dimids = dimids2))
+!""    call check_err(nf90_inquire_variable(ncid, kz_varid, dimids = dimids2))
     idim_z2 = minloc(dimids2,1,mask=dimids2.eq.z2_varid)
-    call check_err(nf90_inquire_dimension(ncid, dimids2(idim_z2), len = h_rec2))
+!""    call check_err(nf90_inquire_dimension(ncid, dimids2(idim_z2), len = h_rec2))
+    h_rec2 = h_rec !for Hardangerfjord 
     ll_rec = 1
     ll_sel = 1
     if (ndims.eq.4) then
         idim_lat = minloc(dimids1,1,mask=dimids1.eq.lat_varid)
         idim_lon = minloc(dimids1,1,mask=dimids1.eq.lon_varid)
-        write(*,*) "idim_lon" 
     select case (nc_file_source) 
         case (1) !ROMS
           call check_err(nf90_inquire_dimension(ncid, dimids1(idim_lat), len = lat_rec))
@@ -232,7 +233,6 @@
         case (2) !GETM
           call check_err(nf90_inquire_dimension(ncid, dimids1(1), len = lat_rec))
           call check_err(nf90_inquire_dimension(ncid, dimids1(2), len = lon_rec))
-          write(*,*) "lat_rec" 
         case (3) !FVCOM
           call check_err(nf90_inquire_dimension(ncid, dimids1(idim_lat), len = lat_rec))
           call check_err(nf90_inquire_dimension(ncid, dimids1(idim_lon), len = lon_rec))
@@ -255,21 +255,16 @@
         if (bctype_top(i_water,ip).eq.3) call check_err(nf90_inq_varid(ncid, trim(ncinsurfpar_name(ip)), surf_varid(ip)))
         if (bctype_bottom(i_water,ip).eq.3) call check_err(nf90_inq_varid(ncid, trim(ncinbotpar_name(ip)), bot_varid(ip)))
         
-    !select case (nc_file_source) 
-    !    case (1,2) !ROMS, GETM
-    !    write(*,*) "ncinhmixpar_name" 
-    !    if (hmixtype(i_water,ip).eq.1) then 
-    !        call check_err(nf90_inq_varid(ncid, trim(ncinhmixpar_name(ip)), hmix_varid(ip))) 
-    !        write(*,*) "in"
-    !    end if 
-    !    case (3)
-    !    continue
-    !end select
+    select case (nc_file_source) 
+        case (1,2) !ROMS, GETM
+        if (hmixtype(i_water,ip).eq.1) call check_err(nf90_inq_varid(ncid, trim(ncinhmixpar_name(ip)), hmix_varid(ip)))
+        case (3)
+        continue
+    end select
 
     end do
     select case (nc_file_source) 
-    case (1,2) !ROMS, GETM
-        write(*,*)  'hmixtype'
+        case (1,2) !ROMS, GETM
         if (maxval(hmixtype(i_water,:)).eq.1) call check_err(nf90_inq_varid(ncid, trim(ncinhmix_rate_name), hmix_rate_varid))
         case (3) !FVCOM
         continue
@@ -289,6 +284,8 @@
     if (ndims.eq.2) then
         allocate(t_temp(h_rec,time_rec))
         allocate(s_temp(h_rec,time_rec))
+        !allocate(t_temp(time_rec,h_rec))
+        !allocate(s_temp(time_rec,h_rec))
         allocate(kz_temp(h_rec2,time_rec))
         allocate(u_temp(h_rec2,time_rec))
         allocate(v_temp(h_rec2,time_rec))
@@ -317,6 +314,7 @@
     allocate(s_w(i_max,k_wat_bbl,days_in_yr))
     allocate(kz_w(i_max,k_wat_bbl+1,days_in_yr))
     allocate(z_w(k_wat_bbl))
+    allocate(dens(k_wat_bbl))
     allocate(z_w2(k_wat_bbl+1))
     allocate(z_w_error(k_wat_bbl))
     allocate(dz_w(k_wat_bbl))
@@ -330,14 +328,14 @@
 
     !Get physical forcings and apply scale factors
     if (ndims.eq.2) then
-        call check_err(nf90_get_var(ncid, t_varid, t_temp))
+        call check_err(nf90_get_var(ncid, t_varid, t_temp))        
         call check_err(nf90_get_var(ncid, s_varid, s_temp))
-        call check_err(nf90_get_var(ncid, kz_varid, kz_temp))
-        if (nc_file_source.eq.3) then
+!!HF        call check_err(nf90_get_var(ncid, kz_varid, kz_temp))
+!        if (nc_file_source.eq.3) then
             call check_err(nf90_get_var(ncid, u_varid, u_temp))
             call check_err(nf90_get_var(ncid, v_varid, v_temp))
-        endif
-        kz_temp = ncinkz_fac * kz_temp
+!        endif
+   !     kz_temp = ncinkz_fac * kz_temp
         if (use_Eair.eq.1) then
             call check_err(nf90_get_var(ncid, Eair_varid, Eair_temp))
             Eair_temp = ncinEair_fac * Eair_temp
@@ -493,7 +491,8 @@
     !Heights of layer midpoints (z_w)
     select case (nc_file_source) 
     case (1,2) !ROMS
-      z_w(1:k_wat_bbl) = z_temp(inds)
+!      z_w(1:k_wat_bbl) = z_temp(inds)
+            z_w(:) = z_temp(:) !case HF
     case (3) !FVCOM
       z_w(:) = z_temp(:)
     end select
@@ -510,7 +509,8 @@
         write(*,*) "Therefore assuming that surface layer thickness hz_w(1) = spacing between first two grid points dz_w(1)"
         write(*,*) "Given this first layer thickness, subsequent layer thicknesses are inferred"
         do j=2,k_wat_bbl
-            hz_w(j) = 2.0_rk*dz_w(j-1) - hz_w(j-1)
+!HF            hz_w(j) = 2.0_rk*dz_w(j-1) - hz_w(j-1)
+            hz_w(j) = 0.5_rk*(dz_w(j-1)+dz_w(j))
         end do
         z_w2(1:k_wat_bbl) = z_w(1:k_wat_bbl) - 0.5_rk*hz_w(1:k_wat_bbl)
         z_w2(k_wat_bbl+1) = z_w(k_wat_bbl) + 0.5_rk*hz_w(k_wat_bbl)
@@ -670,6 +670,39 @@
    endif
 
 
+    if (nc_file_source.eq.1)  then  ! ROMS for Hardangerfjord
+        
+    do iday=1,365 !Loop over days availabel from FVCOM
+            t_w(i_water,1:k_wat_bbl,iday) = t_temp(1:k_wat_bbl,istart+iday+1)
+            s_w(i_water,1:k_wat_bbl,iday) = s_temp(1:k_wat_bbl,istart+iday+1)
+            kz_w(i_water,1:k_wat_bbl,iday) = kz_temp(1:k_wat_bbl,istart+iday+1)
+                        kz_w(i_water,k_wat_bbl+1,iday) = 0.
+            u_x_w(i_water,1:k_wat_bbl,iday) = v_temp(1:k_wat_bbl,istart+iday+1) !(u_temp(inds,istart+iday+1)*u_temp(inds,istart+iday+1)+v_temp(inds,istart+iday+1)*v_temp(inds,istart+iday+1))**0.5
+    enddo
+
+    do iday=1,days_in_yr
+        do j=1, k_wat_bbl
+            call svan(s_w(i_water,j,iday),t_w(i_water,j,iday),z_w(j),dens(j)) !calculate density as f(p,t,s)
+        end do
+        do j=1, k_wat_bbl-1
+            Kz_w(i_water,j,iday)=1.0E-4 /& !0.5E-4
+                ((9.81/(1000.+(dens(j)+dens(j+1))/2.)&
+                *(abs(dens(j+1)-dens(j))/dz_w(j)) &
+                )**0.4)
+        end do
+            Kz_w(i_water,k_wat_bbl,iday)=Kz_w(i_water,k_wat_bbl-1,iday)
+    end do
+    ! fill all the horizontal columns 
+    do i = 1, i_water
+        t_w(i,:,:)  =  t_w(i_water,:,:)
+        s_w(i,:,:)  =  s_w(i_water,:,:)
+        kz_w(i,:,:) = max(0.000001,min(0.15,kz_w(i_water,:,:)))
+        u_x_w(i,:,:)= u_x_w(i_water,:,:)  !convert to m/s from cm/s
+    enddo
+        
+    
+    endif
+    
     if (nc_file_source.eq.3)  then  ! FVCOM for Lindesnes
 !  correct days, since they start from August 20 2015, i.e.+122)
     do iday=1,243 !Loop over days availabel from FVCOM
@@ -695,7 +728,6 @@
         u_x_w(1,j,:) =u_x_w(i_water,k_wat_bbl+1-j,:)
     enddo
 
-
     ! fill all the horizontal columns 
     do i = 1, i_water
         t_w(i,:,:)  =  t_w(1,:,:)
@@ -703,8 +735,6 @@
         kz_w(i,:,:) = max(0.000001,min(0.15,kz_w(1,:,:)))
         u_x_w(i,:,:)= u_x_w(1,:,:)  !convert to m/s from cm/s
     enddo
-   else
-    u_x_w=0.0_rk     
    endif
 
     !Free up memory
@@ -838,9 +868,9 @@
     call check_err(nf90_def_var(nc_id, "Kz", NF90_REAL, dim_ids2, Kz_id))
     call check_err(nf90_put_att(nc_id, Kz_id, "long_name", "vertical eddy diffusivity"))
     call check_err(nf90_put_att(nc_id, Kz_id, "units", "m2/s"))
-    call check_err(nf90_def_var(nc_id, "Ux", NF90_REAL, dim_ids, u_x_w_id))
-    call check_err(nf90_put_att(nc_id, u_x_w_id, "long_name", "horizontal advection"))
-    call check_err(nf90_put_att(nc_id, u_x_w_id, "units", "m/s"))
+    call check_err(nf90_def_var(nc_id, "Ux", NF90_REAL, dim_ids, u_x_id))
+    call check_err(nf90_put_att(nc_id, u_x_id, "long_name", "horizontal advection"))
+    call check_err(nf90_put_att(nc_id, u_x_id, "units", "m/s"))
     call check_err(nf90_def_var(nc_id, "Kz_sol", NF90_REAL, dim_ids2, Kz_sol_id))
     call check_err(nf90_put_att(nc_id, Kz_sol_id, "long_name", "total vertical diffusivity of a solute"))
     call check_err(nf90_put_att(nc_id, Kz_sol_id, "units", "m2/s"))
@@ -875,11 +905,11 @@
 
 !=======================================================================================================================
     subroutine save_netcdf(i_max, k_max, julianday, cc, t, s, kz, kzti, wti, model, z, hz, Eair, use_Eair, hice, use_hice, &
-        fick_per_day, sink_per_day, ip_sol, ip_par, x, u_x_w, i_day)! i_day here = i_day + 1
+        fick_per_day, sink_per_day, ip_sol, ip_par, x, u_x, i_day)! i_day here = i_day + 1
 
     !Input variables
     integer, intent(in)                    :: i_max, k_max, julianday, use_Eair, use_hice, ip_sol, ip_par,i_day
-    real(rk), dimension(:,:,:), intent(in) :: cc, t, s, kz, kzti, wti, fick_per_day, sink_per_day, u_x_w
+    real(rk), dimension(:,:,:), intent(in) :: cc, t, s, kz, kzti, wti, fick_per_day, sink_per_day, u_x
     type (type_model), intent(in)          :: model
     real(rk), dimension(:), intent(in)     :: z, hz, Eair, hice, x
 
@@ -939,7 +969,7 @@
         call check_err(nf90_put_var(nc_id, T_id, t(:,:,julianday), start_cc, count_cc))
         call check_err(nf90_put_var(nc_id, S_id, s(:,:,julianday), start_cc, count_cc))
         call check_err(nf90_put_var(nc_id, Kz_id, kz(:,:,julianday), start_flux, count_flux))
-        if (i_max.gt.1) call check_err(nf90_put_var(nc_id, u_x_w_id, u_x_w(:,:,julianday), start_cc, count_cc))
+        if (i_max.gt.1) call check_err(nf90_put_var(nc_id, u_x_id, u_x(:,:,julianday), start_cc, count_cc))
         call check_err(nf90_put_var(nc_id, Kz_sol_id, kzti(:,:,ip_sol), start_flux, count_flux))
         call check_err(nf90_put_var(nc_id, Kz_par_id, kzti(:,:,ip_par), start_flux, count_flux))
         call check_err(nf90_put_var(nc_id, w_sol_id, wti(:,:,ip_sol), start_flux, count_flux))
@@ -1097,6 +1127,73 @@
     endif
 
     end subroutine check_err
+!=======================================================================================================================
+
+
+
+
+!=======================================================================================================================
+    subroutine svan(s, t, po, sigma)
+!/*
+!c------specific volume anomaly based on 1980 equation of state for
+!c      seawater and 1978 practical salinity scale
+!c      pressure          PO     decibars
+!c      temperature        T     degree celsius (IPTS-68)
+!c      salinitty          S     (PSS-78)
+!c      spec.vol.anom.  SVAN     1.0E-8 m**3/Kg
+!c      density anom.   SIGMA    Kg/m**3
+!*/
+
+    real(rk)  p,sig,sr,r1,r2,r3,s,t,po,sigma
+    real(rk)  a,b,c,d,e,a1,b1,aw,bw,k,ko,kw,k35,v350p,sva,dk,gam,pk,dr35p,dvan
+
+    real(rk) r3500, r4 ,dr350
+    data  r3500 /1028.1063/, r4/4.8314E-4/,dr350/28.106331/
+
+    p=po/10.
+    sr=sqrt(abs(s))
+
+    r1= ((((6.536332E-9*t-1.120083E-6)*t+1.001685E-4)*t &
+           -9.095290E-3)*t+6.793952E-2)*t-28.263737
+    r2= (((5.3875E-9*t-8.2467E-7)*t+7.6438E-5)*t-4.0899E-3)*t &
+          +8.24493E-1
+    r3= (-1.6546E-6*t+1.0227E-4)*t-5.72466E-3
+
+    sig=(r4*s + r3*sr + r2)*s +r1
+
+    v350p=1.0/r3500
+    sva=-sig*v350p/(r3500+sig)
+    sigma= sig + dr350
+
+    if (p.eq.0.0) return
+
+    e = (9.1697E-10*t+2.0816E-8)*t-9.9348E-7
+       bw = (5.2787E-8*t-6.12293E-6)*t+3.47718E-5
+    b = bw + e*s
+
+    d= 1.91075E-4
+    c = (-1.6078E-6*t-1.0981E-5)*t+2.2838E-3
+    aw = ((-5.77905E-7*t+1.16092E-4)*t+1.43713E-3)*t-0.1194975
+    a = (d*sr + c)*s + aw
+
+    b1 = (-5.3009E-4*t+1.6483E-2)*t+7.944E-2
+    a1 = ((-6.1670E-5*t+1.09987E-2)*t-0.603459)*t+54.6746
+    kw = (((-5.155288E-5*t+1.360477E-2)*t-2.327105)*t &
+           +148.4206)*t-1930.06
+    ko = (b1*sr + a1)*s + kw
+
+    dk = (b*p+a)*p+ko
+    k35 = (5.03217E-5*p+3.359406)*p+21582.27
+    gam=p/k35
+    pk=1.0-gam
+    sva = sva * pk + (v350p+sva)*p*dk/(k35*(k35+dk))
+
+    v350p= v350p*pk
+    dr35p=gam/v350p
+    dvan= sva/(v350p*(v350p+sva))
+    sigma = dr350 + dr35p -dvan
+    return
+    end subroutine svan
 !=======================================================================================================================
 
 
