@@ -596,6 +596,9 @@
             wti(i,k_sed1,ip) = w_b(i,k_sed1) + w_1(k_sed1) + w_1c(k_sed1)
         end if
         wti(i,k_max+1,ip) = wti(i,k_max,ip)
+        if(any(wti(i,k_sed1,ip)>100)) then
+          continue
+        end if
     end do
 
     !! Perform advective flux calculation and cc update

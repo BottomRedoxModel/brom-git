@@ -135,6 +135,7 @@
     call fabm_create_model_from_yaml_file(model)
     par_max = size(model%state_variables)
 
+    
     !Allocate biological variables now that par_max is known
     allocate(surf_flux(i_max,par_max))     !surface flux (tracer unit * m/s, positive for tracer entering column)
     allocate(bott_flux(i_max,par_max))     !bottom flux (tracer unit * m/s, positive for tracer entering column)
@@ -415,39 +416,38 @@
     !if(h_relax.eq.1.) then   
     !Get horizontal relaxation parameters from brom.yaml:
     !hmixtype = 0, 1 or 2  for no horizontal relaxation (default), box model mixing respectively
-        do ip=1,par_max
-            hmixtype(i_water,ip) = get_brom_par('hmix_' // trim(par_name(ip)),0.0_rk)
-            hmixtype(:,ip)=hmixtype(i_water,ip)   
+    do ip=1,par_max
+        hmixtype(i_water,ip) = get_brom_par('hmix_' // trim(par_name(ip)),0.0_rk)
+        hmixtype(:,ip)=hmixtype(i_water,ip)   
                         
-            if (hmixtype(i_water,ip).eq.1) then
-                write(*,*) "Horizontal relaxation assumed for " // trim(par_name(ip))            
-            end if
-            if (hmixtype(i_water,ip).eq.2) then
-    !            hmix_file = get_brom_name("hmix_filename_" // trim(par_name(ip)(13:))) !niva_oxydep_NUT
-                write(*,*) "Horizontal relaxation (ASCII) assumed for " // trim(par_name(ip))
-            else if (hmixtype(i_water,ip).eq.2) then  ! read relaxation files in two cases, also for top bondary condition  #bctype_top(i_water,ip).eq.4.or.  
-                open(20, file= get_brom_name("hmix_filename_" // trim(par_name(ip))))!'' // hmix_file
-                do k=1,k_wat_bbl
-                    do i_day=1,days_in_yr
-                        read(20, *) i_dummy,i_dummy,cc_hmix(i_water,ip,k,i_day) ! NODC data (i_max,par_max,k_max,days_in_yr))
-                    end do
-                end do 
-                close(20)
-                do i=i_min,i_water-1
-                    cc_hmix(i,:,:,:)=cc_hmix(i_water,:,:,:)
-                enddo
-               
-            else if (bctype_top(i_water,ip).eq.4.) then    
-                open(40, file = get_brom_name("bc_top_filename_" // trim(par_name(ip)))) !to boundary condition file  
+        if (hmixtype(i_water,ip).eq.1) then
+            write(*,*) "Horizontal relaxation assumed for " // trim(par_name(ip))            
+        end if
+        if (hmixtype(i_water,ip).eq.2) then
+!            hmix_file = get_brom_name("hmix_filename_" // trim(par_name(ip)(13:))) !niva_oxydep_NUT
+            write(*,*) "Horizontal relaxation (ASCII) assumed for " // trim(par_name(ip))
+        else if (hmixtype(i_water,ip).eq.2) then  ! read relaxation files in two cases, also for top bondary condition  #bctype_top(i_water,ip).eq.4.or.  
+            open(20, file= get_brom_name("hmix_filename_" // trim(par_name(ip))))!'' // hmix_file
+            do k=1,k_wat_bbl
                 do i_day=1,days_in_yr
-                    read(40, *) cc_top(i,ip,i_day)
-                end do   
-                close(40)
-                do i=i_min,i_water-1
-                    cc_top(i,:,:)=cc_top(i_water,:,:)
-                enddo
-            end if
-        end do
+                    read(20, *) i_dummy,i_dummy,cc_hmix(i_water,ip,k,i_day) ! NODC data (i_max,par_max,k_max,days_in_yr))
+                end do
+            end do 
+            close(20)
+            do i=i_min,i_water-1
+                cc_hmix(i,:,:,:)=cc_hmix(i_water,:,:,:)
+            enddo
+        else if (bctype_top(i_water,ip).eq.4.) then    
+            open(40, file = get_brom_name("bc_top_filename_" // trim(par_name(ip)))) !to boundary condition file  
+            do i_day=1,days_in_yr
+                read(40, *) cc_top(i_water,ip,i_day) 
+            end do   
+            close(40)
+            !do i=i_min,i_water ! for 2d
+            !    cc_top(i,:,:)=cc_top(i_water,:,:)
+            !enddo
+        end if
+    end do
     !endif
     
     !Set constant forcings
@@ -490,6 +490,9 @@
     real(rk)     :: injection_rate
     real(rk), parameter :: pi=3.141592653589793_rk
     character(len=attribute_length), allocatable, dimension(:)    :: inj_var_name
+    
+    !fabm logical parameters
+    logical:: repair=.true.,valid    
     
     omega = 2.0_rk*pi/365.0_rk
 
@@ -592,7 +595,8 @@
                     surf_flux, bott_flux, bott_source, k_bbl_sed, dz, hz, kz, kz_mol, kz_bio, julianday, id_O2, K_O2s, dt, freq_turb, &
                     diff_method, cnpar, surf_flux_with_diff,bott_flux_with_diff, bioturb_across_SWI, pF1, pF2, phi_inv, is_solid, cc0)
             enddo
-
+            call fabm_check_state(model,1,1,k_max,repair,valid)
+            !(model, i, i, k, dcc(i:i,k,:))  
         !_______bioirrigation_____________!
             if (a1_bioirr.gt.0.0_rk) then
                 do i=i_min, i_water
@@ -628,13 +632,18 @@
             dcc = 0.0_rk
             do i=i_min, i_water
                 do k=1,k_max
-                call fabm_do(model, i, i, k, dcc(i:i,k,:))   !to ask Jorn
-                !Note: We MUST pass the range "i:i" to fabm_do -- a single value "i" will produce compiler error
-            end do
+                    call fabm_do(model, i, i, k, dcc(i:i,k,:))   !to ask Jorn
+                    !Note: We MUST pass the range "i:i" to fabm_do -- a single value "i" will produce compiler error
+                    if (k == 85) then
+                        ip = id_Sipart
+                    end if
+                end do
+                !call fabm_check_state(model,i,i,k_max,repair,valid)
             !Add surface and bottom fluxes if treated here
             if (surf_flux_with_diff.eq.0) then
                 surf_flux = 0.0_rk
                 call fabm_do_surface(model, i, i, surf_flux(i:i,:))
+                !call fabm_check_state(model,i,i,k_max,repair,valid)
                 fick(i,k_min,:) = surf_flux(i,:)
                 do ip=1,par_max
                     dcc(i,k_min,ip) = dcc(i,k_min,ip) + surf_flux(i,ip) / hz(k_min)
@@ -645,6 +654,7 @@
                 bott_flux = 0.0_rk
                 bott_source = 0.0_rk                
                 call fabm_do_bottom(model, i, i, bott_flux(i:i,:),bott_source(i:i,:))
+                !call fabm_check_state(model,i,i,k_max,repair,valid)
                 sink(i,k_max+1,:) = bott_flux(i,:)
                 do ip=1,par_max
                     dcc(i,k_max,ip) = dcc(i,k_max,ip) + bott_flux(i,ip) / hz(k_max)
@@ -676,7 +686,7 @@
             bc_top, bc_bottom, hz, dz, k_bbl_sed, wbio, w_b, u_b, julianday, dt, freq_sed, dynamic_w_sed, is_solid, &
             rho, phi1, fick, k_sed1, K_O2s, kz_bio, id_O2, dphidz_SWI, cc0, bott_flux, bott_source)
         enddo
-    
+        !call fabm_check_state(model,i,i,k_max,repair,valid)
         !________Horizontal relaxation_________!
         if (h_relax.eq.1) then          
             dcc = 0.0_rk
@@ -747,12 +757,10 @@
                     inj_num = ip+1           
                 end do 
                 !print *, "injection num", inj_num
-                cc(i_inj,k_inj,inj_num)=cc(i_inj,k_inj,inj_num)+86400.0_rk*dt*injection_rate/(dx(i_inj)*dx(i_inj)*dz(k_inj))
-                !cc(:,k_inj,2)=cc(:,k_inj,4)+86400.0_rk*dt*10000./(dx(i_inj)*dx(i_inj)*dz(k_inj))    
-                !cc(:,k_inj,inj_num)=cc(:,k_inj,inj_num)+86400.0_rk*dt*injection_rate/(dx(i_inj)*dx(i_inj)*dz(k_inj))          
+                cc(i_inj,k_inj,inj_num)=cc(i_inj,k_inj,inj_num)+86400.0_rk*dt*injection_rate/(dx(i_inj)*dx(i_inj)*dz(k_inj))         
             end if 
         end if
-    
+        call fabm_check_state(model,1,1,k_max,repair,valid)
         !________Check for NaNs (stopping if any found)____________________!
         do ip=1,par_max
             do i=i_min,i_water
@@ -777,7 +785,7 @@
                         wCFL(:,ip) = (abs(wti(i,2:k_max,ip))*86400.0_rk*dt/freq_sed)/dz(1:k_max-1)
                         write(*,*) "maxval(wti(i,:,ip)) = ", maxval(wti(i,:,ip))
                         write(*,*) "maxval(wCFL(:,ip)) = ", maxval(wCFL(:,ip))
-                        write(*,*) "wti = ", wti(i,:,ip)
+                        write(*,*) "wti = problem" !, wti(i,:,ip)
                         if (show_nan_wCFL.eq.2.and.maxval(wCFL(:,ip)).gt.1.0_rk) then
                             write(*,*) "(z_L, wti, wCFL) where wCFL>1 = "
                             do k=1,k_max-1
