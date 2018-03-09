@@ -785,6 +785,8 @@
                 end do 
                 !print *, "injection num", inj_num
                 cc(i_inj,k_inj,inj_num)=cc(i_inj,k_inj,inj_num)+86400.0_rk*dt*injection_rate/(dx(i_inj)*dx(i_inj)*dz(k_inj))
+                cc(i_inj-2,k_inj,inj_num)=cc(i_inj-2,k_inj,inj_num)+86400.0_rk*dt*injection_rate/(dx(i_inj-2)*dx(i_inj-2)*dz(k_inj))
+                cc(i_inj+2,k_inj,inj_num)=cc(i_inj+2,k_inj,inj_num)+86400.0_rk*dt*injection_rate/(dx(i_inj+2)*dx(i_inj+2)*dz(k_inj))
                 !cc(:,k_inj,2)=cc(:,k_inj,4)+86400.0_rk*dt*10000./(dx(i_inj)*dx(i_inj)*dz(k_inj))    
                 !cc(:,k_inj,inj_num)=cc(:,k_inj,inj_num)+86400.0_rk*dt*injection_rate/(dx(i_inj)*dx(i_inj)*dz(k_inj))          
             end if 

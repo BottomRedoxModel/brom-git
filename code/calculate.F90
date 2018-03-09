@@ -751,7 +751,8 @@
     ! we accelerate burying rate due to an increase of particles volume dVV()[m3/sec] in water layer just above SWI
         do k=k_bbl_sed,k_max
             do ip=1,par_max
-                wti(i,k,ip) = wti(i,k,ip) + max(0.0_rk,dVV(i,k_bbl_sed,1))/fresh_PM_poros !/dz(k_bbl_sed)
+!                wti(i,k,ip) = wti(i,k,ip) + max(0.0_rk,dVV(i,k_bbl_sed,1))/fresh_PM_poros !/dz(k_bbl_sed)
+                wti(i,k,ip) = wti(i,k,ip) + max(0.0_rk,dVV(i,k_bbl_sed,1))*dz(k_bbl_sed)/(1.0_rk-fresh_PM_poros) ! newer from Berre
             end do
         enddo
     endif
