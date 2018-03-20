@@ -53,7 +53,7 @@
     !Forcings to be provided to FABM: These must have the POINTER attribute
     real(rk), pointer, dimension(:)            :: pco2atm, windspeed, hice
     real(rk), pointer, dimension(:,:)          :: surf_flux, bott_flux, bott_source, Izt, pressure
-    real(rk), pointer, dimension(:,:,:)        :: t, s
+    real(rk), pointer, dimension(:,:,:)        :: t, s, u_x
     real(rk), pointer, dimension(:,:,:)        :: vv, dvv, cc, cc_out, dcc, dcc_R, wbio
 
     !Surface and bottom forcings, used within brom-transport only
@@ -168,22 +168,30 @@
     !bctype = 0, 1, 2, 3 for no flux (default), Dirichlet constant, Dirichlet sinusoid, and Dirichlet netcdf input respectively
     do ip=1,par_max
         bctype_top(i_water,ip) = get_brom_par('bctype_top_' // trim(par_name(ip)),0.0_rk)
+
         if (bctype_top(i_water,ip).eq.1) then
             bc_top(i_water,ip) = get_brom_par('bc_top_' // trim(par_name(ip)))
             write(*,*) "Constant Dirichlet upper boundary condition for " // trim(par_name(ip))
             write(*,'(a, es10.3)') " = ", bc_top(i_water,ip)
-        else if (bctype_top(i_water,ip).eq.2) then     !Model: bc_top = a1top + a2top*sin(omega*(julianday-a3top))
+
+        else if (bctype_top(i_water,ip).eq.2) then     
+        !Model: bc_top = a1top + a2top*sin(omega*(julianday-a3top))
             bcpar_top(i_water,ip,1) = get_brom_par('a1top_' // trim(par_name(ip)))
             bcpar_top(i_water,ip,2) = get_brom_par('a2top_' // trim(par_name(ip)))
             bcpar_top(i_water,ip,3) = get_brom_par('a3top_' // trim(par_name(ip)))
             write(*,*) "Sinusoidal Dirichlet upper boundary condition for " // trim(par_name(ip))
             write(*,'(a, es10.3, a, es10.3, a, es10.3, a)') " = ", bcpar_top(i_water,ip,1), " + ", &
                   bcpar_top(i_water,ip,2), "*sin(omega*(julianday -", bcpar_top(i_water,ip,3), "))"
-        else if (bctype_top(i_water,ip).eq.3) then     !Read from netcdf
+            
+        !Read from netcdf    
+        else if (bctype_top(i_water,ip).eq.3) then     
             write(*,*) "NetCDF specified Dirichlet upper boundary condition for " // trim(par_name(ip))
-        else if (bctype_top(i_water,ip).eq.4) then     !Read from ascii or calc from calintiiy
+            
+       !Read from ascii or calc from salinty     
+        else if (bctype_top(i_water,ip).eq.4) then     
             write(*,*) "Upper boundary condition from NODC " // trim(par_name(ip))
-        end if        
+        end if 
+        
         bctype_bottom(i_water,ip) = get_brom_par('bctype_bottom_' // trim(par_name(ip)),0.0_rk)
         if (bctype_bottom(i_water,ip).eq.1) then
             bc_bottom(i_water,ip) = get_brom_par('bc_bottom_' // trim(par_name(ip)))
@@ -199,6 +207,7 @@
         else if (bctype_bottom(i_water,ip).eq.3) then  !Read from netcdf
             write(*,*) "NetCDF specified Dirichlet lower boundary condition for " // trim(par_name(ip))
         end if
+        
         bctype_top(:,ip)=bctype_top(i_water,ip)
         bctype_bottom(:,ip)=bctype_bottom(i_water,ip)
     end do

@@ -45,7 +45,7 @@
     id_Baan = find_index(par_name, 'B_BACT_Baan')          
     id_Bhan = find_index(par_name, 'B_BACT_Bhan')
     id_Sipart  = find_index(par_name, 'B_Si_Sipart')    
-    
+    id_NH4 = find_index(par_name, 'B_NUT_NH4')  
     end subroutine get_ids
 !======================================================================================================================= 
     
