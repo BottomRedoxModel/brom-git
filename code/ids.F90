@@ -22,10 +22,10 @@
     
     !Indices of state variables that are needed in brom-transport and subroutines (i.e. boundary conditions description)
     integer :: id_O2, id_Mn2, id_Mn3, id_Mn4, id_H2S, id_Fe2, id_Fe3, id_FeS,   &
-               id_MnS, id_DON, id_PON, id_NH4, id_NO2, id_NO3, id_S0, id_S2O3,  &
+               id_MnS, id_DOML,id_DOMR, id_POML, id_POMR, id_NH4, id_NO2, id_NO3, id_S0, id_S2O3,  &
                id_SO4, id_DIC, id_Alk, id_pCO2, id_PO4, id_Si, id_Sipart, id_Phy, id_Het, &
                id_Baae, id_Bhae, id_Baan, id_Bhan, id_Hplus, id_CaCO3, id_FeS2, id_MnCO3, &
-               id_BaSO4
+               id_BaSO4, id_Ba
     
     
     contains
@@ -38,8 +38,10 @@
     character(len=attribute_length),dimension(:)  :: par_name
 
     id_O2  = find_index(par_name, 'B_BIO_O2')      
-    id_DON = find_index(par_name, 'B_BIO_DON')         
-    id_PON = find_index(par_name, 'B_BIO_PON')       
+    id_DOML = find_index(par_name, 'B_BIO_DOML')         
+    id_DOMR = find_index(par_name, 'B_BIO_DOMR')
+    id_POML = find_index(par_name, 'B_BIO_POML')       
+    id_POMR = find_index(par_name, 'B_BIO_POMR')       
     id_Phy = find_index(par_name, 'B_BIO_Phy')        
     id_Het = find_index(par_name, 'B_BIO_Het')          
     id_Baae = find_index(par_name, 'B_BACT_Baae')           
@@ -70,6 +72,7 @@
     id_Hplus = find_index(par_name, 'B_pH_Hplus')          
     id_CaCO3 = find_index(par_name, 'B_Ca_CaCO3')          
     id_BaSO4 = find_index(par_name, 'B_Ba_BaSO4')       
+    id_Ba = find_index(par_name, 'B_Ba_Ba')       
 
     end subroutine get_ids
 !======================================================================================================================= 

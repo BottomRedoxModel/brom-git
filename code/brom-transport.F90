@@ -37,18 +37,18 @@
 
 
     !Solution parameters to be read from brom.yaml (see brom.yaml for details)
-    integer   :: i_min, i_water, i_max     !x-axis related 
-    integer   :: k_min, k_wat_bbl, k_points_below_water !z-axis related
-    real(rk)  :: dt, water_layer_thickness
+    integer   :: i_min, i_water, i_max       !x-axis related 
+    integer   :: k_min, k_wat_bbl, k_bbl_sed !z-axis related
+    integer   :: k_points_below_water, k_max !z-axis related
+    integer   :: par_max                     !no. BROM variables
     integer   :: i_day, year, days_in_yr, freq_turb, freq_sed, last_day   !time related
     integer   :: diff_method, kz_bbl_type, bioturb_across_SWI  !vertical diffusivity related
     integer   :: h_adv, h_relax, h_turb  !horizontal transport  (advection and relaxation) switches
-    real(rk)  :: K_O2s
     integer   :: input_type, use_Eair, use_hice, port_initial_state, ncoutfile_type !I/O related
+    real(rk)  :: dt, water_layer_thickness
+    real(rk)  :: K_O2s
     character(len=64) :: icfile_name, outfile_name, ncoutfile_name
     character :: hmix_file
-    integer   :: k_bbl_sed, k_max          !z-axis related
-    integer   :: par_max                   !no. BROM variables
 
     !Forcings to be provided to FABM: These must have the POINTER attribute
     real(rk), pointer, dimension(:)            :: pco2atm, windspeed, hice
@@ -237,7 +237,8 @@
         write(*,*) "Done netcdf input"
         !Note: This uses the netCDF file to set z_w = layer midpoints, dz_w = increments between layer midpoints, hz_w = layer thicknesses
     end if
-
+    !## for Jossingfjord
+    k_wat_bbl= 6
         !Determine total number of vertical grid points (layers) now that k_wat_bbl is determined
     k_max = k_wat_bbl + k_points_below_water
 
@@ -553,7 +554,7 @@
         
         julianday = i_day - int(i_day/days_in_yr)*days_in_yr + 1    !"julianday" (1,2,...,days_in_yr)
         if (julianday==1) model_year = model_year + 1
-        write (*,'(a, i4, a, i4)') " model year:", model_year, "; julianday:", julianday
+        write (*,'(a, i4, a, i4, a, f8.4)') " model year:", model_year, "; julianday:", julianday,"; w_sed (cm/yr):", wti(1,k_bbl_sed+2,1)*365*8640000
         !Calculate Izt = <PAR(z)>_24hr for this day
         do i=i_min, i_water
             call calculate_light(julianday, i, k_bbl_sed, k_max, par_max, hz, Eair, use_Eair, hice, cc, is_solid, rho, Izt)
@@ -725,7 +726,7 @@
                         !Calculate tendency dcc (water column only)
                         dcc(i,:,ip) = 0.5 * hmix_rate(i,:,julianday)*2.0_rk*(cc_hmix(i,ip,:,julianday)-cc(i,:,ip))/dx(i)/dx(i)
                         !Update concentration (water column only)
-                        do k=1,k_max
+                        do k=1,k_wat_bbl
                             cc(i,k,ip) = cc(i,k,ip) + dt*dcc(i,k,ip)
                         end do
                         cc(i,:,ip) = max(cc0, cc(i,:,ip)) !Impose resilient concentration
@@ -735,7 +736,7 @@
         endif      
     
         !________Horizontal turbulence_________!
-        if (h_turb.eq.1) then
+        if (h_turb.eq.1.and.i_max.gt.1) then
             dcc = 0.0_rk
             do ip=1,par_max
                 do i=i_min+1, i_water-1
@@ -744,7 +745,7 @@
                     dcc(i_min,:,ip)   = hmix_rate(i_min,:,julianday)*(cc(i_min+1,:,ip)+cc(i_water,:,ip)-2.0_rk*cc(i_min,:,ip))/dx(i_min)/dx(i_min)
                     dcc(i_water,:,ip) = hmix_rate(i_water,:,julianday)*(cc(i_min,:,ip)+cc(i_water-1,:,ip)-2.0_rk*cc(i_water,:,ip))/dx(i_water)/dx(i_water)
                 do i=i_min, i_water
-                    do k=1,k_max
+                    do k=1,k_wat_bbl
                         cc(i,k,ip) = cc(i,k,ip) + dt*dcc(i,k,ip) !Simple Euler time step
                     enddo
                     cc(i,:,ip) = max(cc0, cc(i,:,ip)) !Impose resilient concentration
@@ -753,7 +754,7 @@
         end if
     
         !________Horizontal advection_________!
-        if (h_adv.eq.1) then
+        if (h_adv.eq.1.and.i_max.gt.1) then
             dcc = 0.0_rk
             do ip=1,par_max
                 do i=i_min+1, i_water-1
@@ -765,7 +766,7 @@
                 dcc(i_water,:,ip) = max(0.0_rk,u_x(i_water,:,julianday))*(cc(i_water-1,:,ip)-cc(i_water,:,ip))/dx(i_water)  &
                        + max(0.0_rk,-u_x(i_water,:,julianday))*(cc(i_min,:,ip)-cc(i_water,:,ip))/dx(i_water)
                 do i=i_min, i_water
-                    do k=1,k_max
+                    do k=1,k_wat_bbl
                         cc(i,k,ip) = cc(i,k,ip) + dt*dcc(i,k,ip) !Simple Euler time step
                     enddo
                     cc(i,:,ip) = max(cc0, cc(i,:,ip)) !Impose resilient concentration
@@ -776,7 +777,7 @@
         !________Injection____________________!
         !            !Source of "acetate" 1292 mmol/sec, should be devided to the volume of the grid cell, i.e. dz(k)*dx(i)*dx(i)
 
-        if (i_day.gt.start_inj.and.i_day.le.stop_inj) then
+        if (i_day.gt.start_inj.and.i_day.le.stop_inj.and.i_max.gt.1) then
             if (inj_swith.eq.1)  then
                 do ip = 1, par_max
                     !do while ((par_name(ip).eq.get_brom_name("inj_var_name"))) 
@@ -785,9 +786,6 @@
                 end do 
                 !print *, "injection num", inj_num
                 cc(i_inj,k_inj,inj_num)=cc(i_inj,k_inj,inj_num)+86400.0_rk*dt*injection_rate/(dx(i_inj)*dx(i_inj)*dz(k_inj))
-                cc(i_inj-2,k_inj,inj_num)=cc(i_inj-2,k_inj,inj_num)+86400.0_rk*dt*injection_rate/(dx(i_inj-2)*dx(i_inj-2)*dz(k_inj))
-                cc(i_inj+2,k_inj,inj_num)=cc(i_inj+2,k_inj,inj_num)+86400.0_rk*dt*injection_rate/(dx(i_inj+2)*dx(i_inj+2)*dz(k_inj))
-                !cc(:,k_inj,2)=cc(:,k_inj,4)+86400.0_rk*dt*10000./(dx(i_inj)*dx(i_inj)*dz(k_inj))    
                 !cc(:,k_inj,inj_num)=cc(:,k_inj,inj_num)+86400.0_rk*dt*injection_rate/(dx(i_inj)*dx(i_inj)*dz(k_inj))          
             end if 
         end if
@@ -834,6 +832,7 @@
     !Save output to netcdf every day
     fick_per_day = 86400.0_rk * fick
     sink_per_day = 86400.0_rk * sink
+    cc(:,:,id_Ba)=wti(:,:,id_Ba) !Burying rate
     !!!
     !!!if (sediments_units_convert.eq.0) then 
     !!!    if (ncoutfile_type == 1) then

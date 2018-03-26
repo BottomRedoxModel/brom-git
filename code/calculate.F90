@@ -54,7 +54,7 @@
     real(rk)     :: kESS                       !attenuation due to suspended silt
     real(rk)     :: ESS                        !assumed (constant) concentration of suspended silt
     real(rk)     :: kPhy                       !attenuation due to phytoplankton
-    real(rk)     :: kPON                       !attenuation due to particulate organic matter
+    real(rk)     :: kPOML                       !attenuation due to particulate organic matter
     real(rk)     :: kHet                       !attenuation due to zooplankton
     real(rk)     :: kDON                       !attenuation due to dissolved organic matter
     real(rk)     :: kB                         !attenuation due to bacteria
@@ -84,7 +84,7 @@
         kESS = get_brom_par("kESS")
         ESS = get_brom_par("ESS")
         kPhy = get_brom_par("kPhy")
-        kPON = get_brom_par("kPON")
+        kPOML = get_brom_par("kPOML")
 
     if (light_model.eq.1) then
         kHet = get_brom_par("kHet")
@@ -115,26 +115,26 @@
             !If in the sediments set PAR(z) to zero, otherwise calculate layer-average PAR(z)
             if (k.le.k_bbl_sed) then !This is simplest (and safest) criterion
                 if (light_model.eq.0) then !Simple model from ersem/light.f90
-!                    xk = k0r + kESS*ESS + kPhy*cc(i,k,id_Phy) + kPON*cc(i,k,id_PON)
-                    xk = k0r + kESS*ESS + kPhy*cc(i,k,id_Phy) + kPON*cc(i,k,id_PON)
-                    !Attenuation over layer k [m^-1] due to background, suspended sediment, phytoplankton, and PON
+!                    xk = k0r + kESS*ESS + kPhy*cc(i,k,id_Phy) + kPOML*cc(i,k,id_POML)
+                    xk = k0r + kESS*ESS + kPhy*cc(i,k,id_Phy) + kPOML*(cc(i,k,id_POML)+cc(i,k,id_POMR))
+                    !Attenuation over layer k [m^-1] due to background, suspended sediment, phytoplankton, and POML
                 endif
 
                 if (light_model.eq.1) then !Extended model accounting for other particulate species modelled in BROM
-                    xk = k0r + kESS*ESS + kPhy*cc(i,k,id_Phy) + kPON*cc(i,k,id_PON) + &
-                        kHet*cc(i,k,id_Het) + kDON*cc(i,k,id_DON) + &
-                        kB*(cc(i,k,id_Baae)+cc(i,k,id_Baan)+cc(i,k,id_Bhae)+cc(i,k,id_Bhan))
+                    xk = k0r + kESS*ESS + kPhy*cc(i,k,id_Phy) + kPOML*(cc(i,k,id_POML)+cc(i,k,id_POMR)) &
+                        + kHet*cc(i,k,id_Het) + kDON*(cc(i,k,id_DOML)+cc(i,k,id_DOMR)) &
+                        + kB*(cc(i,k,id_Baae)+cc(i,k,id_Baan)+cc(i,k,id_Bhae)+cc(i,k,id_Bhan))
                     do ip=1,par_max
-                        if (is_solid(ip).eq.1.and.ip.ne.id_Phy.and.ip.ne.id_PON.and.ip.ne.id_Het) then
+                        if (is_solid(ip).eq.1.and.ip.ne.id_Phy.and.ip.ne.id_POML.and.ip.ne.id_POMR.and.ip.ne.id_Het) then
                             xk = xk + kPIV*cc(i,k,ip)/rho(ip)
                         end if
                     end do
-                    !Attenuation over layer k [m^-1] due to background, suspended sediment, phytoplankton, PON, zooplankton,
+                    !Attenuation over layer k [m^-1] due to background, suspended sediment, phytoplankton, POML, zooplankton,
                     !dissolved organic nitrogen, bacteria, and particulate inorganic volume fraction
                 end if
                 
                 if (light_model.eq.2) then   
-                    xk = k0r + kESS*ESS + kPhy*cc(i,k,2) + kPON*cc(i,k,4)  !case OxyDep                    
+                    xk = k0r + kESS*ESS + kPhy*cc(i,k,2) + kPOML*cc(i,k,4)  !case OxyDep                    
                 end if
                 
                 xtnc = xk*hz(k)     !Extinction over layer k with thickness hz(k)
@@ -749,7 +749,7 @@
     
     if (dynamic_w_sed.ne.0) then ! case  burial velosity depeneing on particles accumulation above SWI
     ! we accelerate burying rate due to an increase of particles volume dVV()[m3/sec] in water layer just above SWI
-        do k=k_bbl_sed,k_max
+        do k=1,k_max !        do k=k_bbl_sed,k_max
             do ip=1,par_max
 !                wti(i,k,ip) = wti(i,k,ip) + max(0.0_rk,dVV(i,k_bbl_sed,1))/fresh_PM_poros !/dz(k_bbl_sed)
                 wti(i,k,ip) = wti(i,k,ip) + max(0.0_rk,dVV(i,k_bbl_sed,1))*dz(k_bbl_sed)/(1.0_rk-fresh_PM_poros) ! newer from Berre
