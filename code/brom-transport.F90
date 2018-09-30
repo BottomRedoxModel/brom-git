@@ -44,9 +44,10 @@
     integer   :: i_day, year, days_in_yr, freq_turb, freq_sed, last_day   !time related
     integer   :: diff_method, kz_bbl_type, bioturb_across_SWI  !vertical diffusivity related
     integer   :: h_adv, h_relax, h_turb  !horizontal transport  (advection and relaxation) switches
-    integer   :: input_type, use_Eair, use_hice, port_initial_state, ncoutfile_type !I/O related
+    integer   :: use_Eair, use_hice, use_gargett ! use inut for light, ice, calculate Kz
+    integer   :: input_type, port_initial_state, ncoutfile_type !I/O related
     real(rk)  :: dt, water_layer_thickness
-    real(rk)  :: K_O2s
+    real(rk)  :: K_O2s, gargett_a0,gargett_q
     character(len=64) :: icfile_name, outfile_name, ncoutfile_name
     character :: hmix_file
 
@@ -57,7 +58,7 @@
     real(rk), pointer, dimension(:,:,:)        :: vv, dvv, cc, cc_out, dcc, dcc_R, wbio
 
     !Surface and bottom forcings, used within brom-transport only
-    real(rk), allocatable, dimension(:)        :: Eair
+    real(rk), allocatable, dimension(:)      :: Eair
     real(rk), allocatable, dimension(:,:,:)    :: cc_top, cc_bottom
 
     !Horizontal mixing forcings, used within brom-transport only
@@ -66,7 +67,7 @@
 
     !Grid parameters and forcings for water column only
     real(rk), allocatable, dimension(:)        :: z_w, dz_w, hz_w
-    real(rk), allocatable, dimension(:,:,:)    :: t_w, s_w, kz_w, hmix_rate_w, u_x_w
+    real(rk), allocatable, dimension(:,:,:)    :: t_w, s_w, kz_w, u_x_w
     real(rk), allocatable, dimension(:,:,:,:)  :: cc_hmix_w
 
     !Grid parameters and forcings for full column including water and sediments
@@ -125,12 +126,15 @@
     icfile_name = get_brom_name("icfile_name")
     outfile_name = get_brom_name("outfile_name")
     ncoutfile_name = get_brom_name("ncoutfile_name")
-    ncoutfile_type = get_brom_par("ncoutfile_type")    
+    ncoutfile_type = get_brom_par("ncoutfile_type")
     K_O2s = get_brom_par("K_O2s")
     h_adv =  get_brom_par("h_adv")
     h_relax =  get_brom_par("h_relax")
     h_turb =  get_brom_par("h_turb")
     dx_adv = get_brom_par("dx_adv")
+    use_gargett = get_brom_par("use_gargett")
+    gargett_a0 = get_brom_par("gargett_a0")
+    gargett_q = get_brom_par("gargett_q")
     !Initialize FABM model from fabm.yaml
     call fabm_create_model_from_yaml_file(model)
     par_max = size(model%state_variables)
@@ -224,16 +228,15 @@
         allocate(Eair(days_in_yr))
         allocate(hice(days_in_yr))
         allocate(cc_hmix_w(i_max,par_max,k_wat_bbl,days_in_yr))
-        allocate(hmix_rate_w(i_max,k_wat_bbl,days_in_yr))
         cc_hmix_w = 0.0_rk
-        hmix_rate_w = 0.0_rk
         Eair = 0.0_rk
         hice = 0.0_rk
         write(*,*) "Done ascii input"
     end if
     if (input_type.eq.2) then !Input water column physics from netcdf
-        call input_netcdf(z_w, dz_w, hz_w, t_w, s_w, kz_w, hmix_rate_w, Eair, use_Eair, hice, use_hice, year, i_water, i_max, &
-        days_in_yr, k_wat_bbl, par_name, par_max, bctype_top, bctype_bottom, cc_top, cc_bottom, hmixtype, cc_hmix_w, h_adv, u_x_w)        
+        call input_netcdf_2(z_w, dz_w, hz_w, t_w, s_w, kz_w, Eair, use_Eair, &
+        hice, use_hice, gargett_a0, gargett_q, use_gargett, &
+        year, i_water, i_max, days_in_yr, k_wat_bbl, u_x_w)
         write(*,*) "Done netcdf input"
         !Note: This uses the netCDF file to set z_w = layer midpoints, dz_w = increments between layer midpoints, hz_w = layer thicknesses
     end if
@@ -404,7 +407,7 @@
 
     !Complete hydrophysical forcings
     cc_hmix=0.0_rk
-    call make_physics_bbl_sed(t, s, kz, hmix_rate, cc_hmix, u_x, u_x_w, t_w, s_w, kz_w, hmix_rate_w, cc_hmix_w, kz_mol, kz_bio, &
+    call make_physics_bbl_sed(t, s, kz, hmix_rate, cc_hmix, u_x, u_x_w, t_w, s_w, kz_w, cc_hmix_w, kz_mol, kz_bio, &
         z, dz, hz, i_min, i_max, i_water, k_wat_bbl, k_bbl_sed, k_max, par_max, days_in_yr, alpha, is_solid, phi, phi1, phi_inv, &
         pF1, pF2, mu0_musw, tortuosity, w_b, u_b, rho, dt, freq_turb, par_name, diff_method, bioturb_across_SWI, &
         ip_sol, ip_par, dphidz_SWI, wat_content, pWC)
@@ -497,7 +500,7 @@
     real(rk)     :: injection_rate                   ! injection rate
     real(rk), parameter :: pi=3.141592653589793_rk
     character(len=attribute_length), allocatable, dimension(:)    :: inj_var_name
-    
+
     omega = 2.0_rk*pi/365.0_rk
 
     !Get parameters for the time-stepping and vertical diffusion / sedimentation
@@ -530,9 +533,10 @@
     idt = int(1._rk/dt)                                      !number of cycles per day
     model_year = 0
     kzti = 0.0_rk
-
+    sink=0.0_rk
+    wti=0.0_rk
     dVV = 0.0_rk
-  
+
         !convert bottom boundary values from 'mass/pore water ml' for dissolved and 'mass/mass' for solids into 'mass/total volume'
     if (bc_units_convert.eq.1) then
         do i=i_min,i_water
@@ -541,24 +545,25 @@
             enddo
           enddo    
     end if
-    
+
     !Uniform horizontal relaxation if prescribed
     if(hmix_rate_uniform>0.0_rk)    hmix_rate=hmix_rate_uniform
-
     !Master time step loop over days
     write(*,*) "Starting time stepping"
 
  !_______BIG Cycle ("i_day"=0,...,last_day-1)________!
 
     do i_day=0,(last_day-1)
-        
+
         julianday = i_day - int(i_day/days_in_yr)*days_in_yr + 1    !"julianday" (1,2,...,days_in_yr)
         if (julianday==1) model_year = model_year + 1
-        write (*,'(a, i4, a, i4, a, f8.4)') " model year:", model_year, "; julianday:", julianday,"; w_sed (cm/yr):", wti(1,k_bbl_sed+2,1)*365*8640000
+
+        write (*,'(a, i4, a, i4, a, f8.4)') " model year:", model_year, "; julianday:", julianday,"; w_sed (cm/yr):", wti(1,k_bbl_sed+2,1)*365.*8640000.
         !Calculate Izt = <PAR(z)>_24hr for this day
         do i=i_min, i_water
-            call calculate_light(julianday, i, k_bbl_sed, k_max, par_max, hz, Eair, use_Eair, hice, cc, is_solid, rho, Izt)
+            call calculate_light(julianday, i, k_bbl_sed, k_max, par_max, hz, Eair, use_Eair, hice, use_hice, cc, is_solid, rho, Izt)
         enddo
+
         ! Reload daily cheanges in t and s
         call fabm_link_bulk_data(model, standard_variables%temperature, t(:,:,julianday))
         call fabm_link_bulk_data(model, standard_variables%practical_salinity, s(:,:,julianday))
@@ -597,7 +602,7 @@
         !Subloop over timesteps in the course of one day
         !Note: The numerical approach here is Operator Splitting with tracer transport processes assumed to be
         !numerically more demanding than the biogeochemistry (hence freq_turb, freq_sed >= 1) (Butenschon et al., 2012)
-        
+
         do id=1,idt
             dVV(:,:,1)=0.0
         !_______vertical diffusion________!
@@ -613,7 +618,6 @@
                     endif
                 enddo
             enddo
-
         !_______bioirrigation_____________!
             if (a1_bioirr.gt.0.0_rk) then
                 do i=i_min, i_water
@@ -644,7 +648,6 @@
                     end do
                 enddo
             end if
-
             !_____water_biogeochemistry_______!
             dcc = 0.0_rk
             do i=i_min, i_water
@@ -671,7 +674,6 @@
                     dcc(i,k_max,ip) = dcc(i,k_max,ip) + bott_flux(i,ip) / hz(k_max)
                 end do
             end if
-    
             if (dynamic_w_sed.eq.1) dcc_R(i,:,:) = dcc(i,:,:) !Record biological reaction terms for use in calculate_sed
             !Euler time step due to FABM biogeochemistry
             do k=1,k_max
@@ -702,7 +704,7 @@
            end do
         enddo
        if (id.eq.1) write (8,'(a, i4, a, i4, a, e)') " model year:", model_year, "; julianday:", julianday, "; dVV(k_bbl_sed):", dVV(1,k_bbl_sed,1)
-        !_______Particles sinking_________!
+       !_______Particles sinking_________!
         do i=i_min, i_water
             if(model_w_sed.ge.1) then
                 call calculate_sed(i, k_max, par_max, model, cc, wti, sink, dcc, dcc_R, bctype_top, bctype_bottom, &
@@ -733,8 +735,7 @@
                     end if
                 end do
             enddo
-        endif      
-    
+        endif
         !________Horizontal turbulence_________!
         if (h_turb.eq.1.and.i_max.gt.1) then
             dcc = 0.0_rk
@@ -752,7 +753,6 @@
                 enddo        
             enddo          
         end if
-    
         !________Horizontal advection_________!
         if (h_adv.eq.1.and.i_max.gt.1) then
             dcc = 0.0_rk
@@ -773,23 +773,21 @@
                 enddo        
             enddo          
         endif
-    
         !________Injection____________________!
         !            !Source of "acetate" 1292 mmol/sec, should be devided to the volume of the grid cell, i.e. dz(k)*dx(i)*dx(i)
 
-        if (i_day.gt.start_inj.and.i_day.le.stop_inj.and.i_max.gt.1) then
+        if (i_day.gt.start_inj.and.i_day.le.stop_inj.and.i_max.gt.0) then
             if (inj_swith.eq.1)  then
                 do ip = 1, par_max
                     !do while ((par_name(ip).eq.get_brom_name("inj_var_name"))) 
                     if (par_name(ip).eq.get_brom_name("inj_var_name")) exit 
-                    inj_num = ip!+1           
+                    inj_num = ip+1           
                 end do 
                 !print *, "injection num", inj_num
                 cc(i_inj,k_inj,inj_num)=cc(i_inj,k_inj,inj_num)+86400.0_rk*dt*injection_rate/(dx(i_inj)*dx(i_inj)*dz(k_inj))
                 !cc(:,k_inj,inj_num)=cc(:,k_inj,inj_num)+86400.0_rk*dt*injection_rate/(dx(i_inj)*dx(i_inj)*dz(k_inj))          
             end if 
         end if
-    
         !________Check for NaNs (stopping if any found)____________________!
         do ip=1,par_max
             do i=i_min,i_water
@@ -832,7 +830,7 @@
     !Save output to netcdf every day
     fick_per_day = 86400.0_rk * fick
     sink_per_day = 86400.0_rk * sink
-    cc(:,:,id_Ba)=wti(:,:,id_Ba) !Burying rate
+ !  cc(:,:,id_Ba)=wti(:,:,id_Ba) !Burying rate
     !!!
     !!!if (sediments_units_convert.eq.0) then 
     !!!    if (ncoutfile_type == 1) then
@@ -962,7 +960,6 @@
     deallocate(u_x_w)
     deallocate(s_w)
     deallocate(kz_w)
-    deallocate(hmix_rate_w)
     deallocate(cc_hmix_w)
     deallocate(z)
     deallocate(dz)

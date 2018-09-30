@@ -25,8 +25,8 @@
                id_MnS, id_DOML,id_DOMR, id_POML, id_POMR, id_NH4, id_NO2, id_NO3, id_S0, id_S2O3,  &
                id_SO4, id_DIC, id_Alk, id_pCO2, id_PO4, id_Si, id_Sipart, id_Phy, id_Het, &
                id_Baae, id_Bhae, id_Baan, id_Bhan, id_Hplus, id_CaCO3, id_FeS2, id_MnCO3, &
+               id_Ni, id_NiS, id_Ni_biota, id_Ni_POM, id_Ni_DOM, id_Ni_Mn4, id_Ni_FeS, id_Ni_FeS2, &
                id_BaSO4, id_Ba
-    
     
     contains
     
@@ -71,8 +71,16 @@
     id_Alk = find_index(par_name, 'B_C_Alk')  
     id_Hplus = find_index(par_name, 'B_pH_Hplus')          
     id_CaCO3 = find_index(par_name, 'B_Ca_CaCO3')          
-    id_BaSO4 = find_index(par_name, 'B_Ba_BaSO4')       
-    id_Ba = find_index(par_name, 'B_Ba_Ba')       
+    id_BaSO4 = find_index(par_name, 'B_Ba_BaSO4')
+    id_Ba = find_index(par_name, 'B_Ba_Ba')
+    id_Ni = find_index(par_name, 'B_Ni_Ni')
+    id_NiS = find_index(par_name, 'B_Ni_NiS')
+    id_Ni_biota = find_index(par_name, 'B_Ni_biota')
+    id_Ni_POM = find_index(par_name, 'B_Ni_POM')
+    id_Ni_DOM = find_index(par_name, 'B_Ni_DOM')
+    id_Ni_Mn4 = find_index(par_name, 'B_Ni_Mn4')
+    id_Ni_FeS = find_index(par_name, 'B_Ni_FeS')
+    id_Ni_FeS2 = find_index(par_name, 'B_Ni_FeS2')
 
     end subroutine get_ids
 !======================================================================================================================= 

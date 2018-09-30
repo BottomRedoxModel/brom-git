@@ -323,7 +323,7 @@
                     if (value /= 0.) then
                         cc(i,k,ip) = value
                     else
-                        cc(i,k,ip) = 0.0001
+                        cc(i,k,ip) = 0.000
                     end if
                 end if
             end do
@@ -854,7 +854,7 @@
 
 
 !=======================================================================================================================
-    subroutine make_physics_bbl_sed(t, s, kz, hmix_rate, cc_hmix, u_x, u_x_w, t_w, s_w, kz_w, hmix_rate_w, cc_hmix_w, kz_mol, kz_bio, &
+    subroutine make_physics_bbl_sed(t, s, kz, hmix_rate, cc_hmix, u_x, u_x_w, t_w, s_w, kz_w, cc_hmix_w, kz_mol, kz_bio, &
         z, dz, hz, i_min, i_max, i_water, k_wat_bbl, k_bbl_sed, k_max, par_max, days_in_yr, alpha, is_solid, phi, phi1, phi_inv, &
         pF1, pF2, mu0_musw, tortuosity, w_b, u_b, rho, dt, freq_turb, par_name, diff_method, bioturb_across_SWI, &
         ip_sol, ip_par, dphidz_SWI, wat_content,pWC)
@@ -868,7 +868,7 @@
     integer, dimension(:), intent(in)         :: is_solid
     real(rk), intent(in)                      :: dt
     real(rk), dimension(:), intent(in)        :: z, dz, hz
-    real(rk), dimension(:,:,:), intent(in)    :: t_w, s_w, kz_w, hmix_rate_w, u_x_w
+    real(rk), dimension(:,:,:), intent(in)    :: t_w, s_w, kz_w, u_x_w
     real(rk), dimension(:,:,:,:), intent(in)  :: cc_hmix_w
     character(len=attribute_length), dimension(:), intent(in) :: par_name
 
@@ -1034,8 +1034,8 @@
         end if
 
         !Horizontal mixing rate (hmix_rate) and reservoir concentrations (cc_hmix)
-        hmix_rate(i,1:k_wat_bbl,iday) = hmix_rate_w(i,1:k_wat_bbl,iday)
-        cc_hmix(i,1:par_max,1:k_wat_bbl,iday) = cc_hmix_w(i,1:par_max,1:k_wat_bbl,iday)
+        hmix_rate(i,1:k_wat_bbl,iday) = 0.0_rk 
+        cc_hmix(i,1:par_max,1:k_wat_bbl,iday) = 0.0_rk !cc_hmix_w(i,1:par_max,1:k_wat_bbl,iday)
     end do
   enddo
     !Porosity (phi) (assumed constant in time)

@@ -51,7 +51,11 @@ add_executable(brom WIN32
                diff_center.F90
                ids.F90
                tridiagonal.F90
-               util.F90)
+               util.F90
+			   input_mod.F90
+			   item_mod.F90
+			   list_mod.F90
+			   types_mod.F90)
 
 set_property(TARGET brom APPEND PROPERTY INCLUDE_DIRECTORIES "${FABM_INCLUDE_DIRS}")
 set_property(TARGET brom APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES "${FABM_INCLUDE_DIRS}")

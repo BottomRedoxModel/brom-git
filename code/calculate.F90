@@ -28,7 +28,8 @@
     contains
 
 !=======================================================================================================================
-   subroutine calculate_light(julianday, i, k_bbl_sed, k_max, par_max, hz, Eair, use_Eair, hice, cc, is_solid, rho, Izt)
+   subroutine calculate_light(julianday, i, k_bbl_sed, k_max, par_max, hz, Eair, use_Eair, &
+                              hice, use_hice, cc, is_solid, rho, Izt)
 
     !Calculates photosynthetically active radiation (PAR = Izt) thoughout water column and sediments
 
@@ -37,7 +38,7 @@
     implicit none
 
     !Input variables
-    integer, intent(in)                         :: julianday, k_bbl_sed, k_max, par_max, use_Eair
+    integer, intent(in)                         :: julianday, k_bbl_sed, k_max, par_max, use_Eair, use_hice
     integer, dimension(:), intent(in)           :: is_solid
     real(rk), dimension(:), intent(in)          :: hz, Eair, hice, rho
     real(rk), dimension(:,:,:), intent(in)      :: cc
@@ -95,7 +96,7 @@
 
 
     !Compute surface shortwave downwelling irradiance [W m^-2, 24-hr average]
-    if (use_Eair.eq.0) then
+    if (use_Eair.lt.1) then
         decl = 23.5_rk*sin(2.0_rk*pi*(real(julianday,rk)-81.0_rk)/365.0_rk) !Solar declination in degrees
         Iot = max(0.0_rk, Io*cos((lat_light-decl)*pi/180.0_rk))
         !This is the approximation used in Yakushev and Sorensen (2013) for OXYDEP
@@ -108,8 +109,9 @@
     Izt(i,:) = 0.0_rk
     buffer = Iot                    !24-hr average downwelling shortwave irradiance in air <E_d>_24(air) [W/m2]
     buffer = buffer*Eair_to_PAR0    !Factor to convert <E_d>_24(air) to scalar 24-hr average PAR in water <PAR_o>_24(0)
-    buffer = buffer*max(0.0_rk, (1.0_rk-hice(julianday)/0.6_rk)) !Attenuation due to ice (soon to be replaced by ice module)
-
+    if (use_hice.gt.0) then
+      buffer = buffer*max(0.0_rk, (1.0_rk-hice(julianday)/0.6_rk)) !Attenuation due to ice (soon to be replaced by ice module)
+    endif
     if (buffer.gt.0.0_rk) then
         do k=1,k_max
             !If in the sediments set PAR(z) to zero, otherwise calculate layer-average PAR(z)
@@ -720,11 +722,11 @@
     end do
     wbio = -1.0_rk * wbio !FABM returns NEGATIVE wbio for sinking; sign change here means that wbio is POSITIVE for sinking
 
-        wti(i,1,:) = 0.0_rk
     ! wti() at water column layer midpoints including Air-sea interface (unused) 
     !    and not including SWI:  (as wbio in FABM) 
         wti(i,1:k_bbl_sed,:) = wbio(i,1:k_bbl_sed,:) 
-        
+        wti(i,1,:) = 0.0_rk
+
     if (constant_w_sed.ne.0) then  ! case constant burial velosity
         
     ! wti() at sediment layer midpoints: w_b, backgound burying velocity
@@ -747,7 +749,7 @@
     
     endif
     
-    if (dynamic_w_sed.ne.0) then ! case  burial velosity depeneing on particles accumulation above SWI
+    if (dynamic_w_sed.ne.0) then ! case  burial velosity depending on particles accumulation above SWI
     ! we accelerate burying rate due to an increase of particles volume dVV()[m3/sec] in water layer just above SWI
         do k=1,k_max !        do k=k_bbl_sed,k_max
             do ip=1,par_max
