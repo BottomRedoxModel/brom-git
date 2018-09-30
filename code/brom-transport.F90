@@ -486,7 +486,7 @@
     integer      :: show_maxmin, show_kztCFL, show_wCFL, show_nan, show_nan_kztCFL, show_nan_wCFL     !options for runtime output to screen
     integer      :: bc_units_convert, sediments_units_convert !options for conversion of concentrations units in the sediment 
     integer      :: julianday, model_year
-    integer      :: k_inj,i_inj,inj_swith,inj_num,start_inj,stop_inj    !#number of layer and column to inject into, start day, stop day number 
+    integer      :: k_inj,i_inj,inj_switch,inj_num,start_inj,stop_inj    !#number of layer and column to inject into, start day, stop day number 
     real(rk)     :: cnpar                            !"Implicitness" parameter for GOTM vertical diffusion (set in brom.yaml)
     real(rk)     :: cc0                              !Resilient concentration (same for all variables)
     real(rk)     :: omega                            !angular frequency of sinusoidal forcing = 2*pi/365 rads/day
@@ -497,9 +497,9 @@
     real(rk)     :: w_binf                   ! 
     real(rk)     :: bu_co                   ! "Burial coeficient" for setting velosity exactly to the SWI proportional to the 
                                            !   settling velocity in the water column (0<bu_co<1), 0 - for no setting velosity, (nd)
-    real(rk)     :: injection_rate                   ! injection rate
+    real(rk)     :: inj_rate,inj_rate2,inj_rate3                   ! injection rate
     real(rk), parameter :: pi=3.141592653589793_rk
-    character(len=attribute_length), allocatable, dimension(:)    :: inj_var_name
+    character(len=attribute_length), allocatable, dimension(:)    :: inj_var_name,inj_var_name2,inj_var_name3
 
     omega = 2.0_rk*pi/365.0_rk
 
@@ -524,10 +524,12 @@
     bc_units_convert = get_brom_par("bc_units_convert")
     sediments_units_convert = get_brom_par("sediments_units_convert")
     hmix_rate_uniform = get_brom_par("hmix_rate_uniform")
-    injection_rate = get_brom_par("injection_rate") 
+    inj_rate = get_brom_par("injection_rate")
+    inj_rate2 = get_brom_par("injection_rate2")
+    inj_rate3 = get_brom_par("injection_rate3")
     k_inj = get_brom_par("k_injection") 
     i_inj = get_brom_par("i_injection") 
-    inj_swith = get_brom_par("injection_swith")
+    inj_switch = get_brom_par("injection_switch")
     start_inj = get_brom_par("start_inj")
     stop_inj = get_brom_par("stop_inj")    
     idt = int(1._rk/dt)                                      !number of cycles per day
@@ -777,15 +779,22 @@
         !            !Source of "acetate" 1292 mmol/sec, should be devided to the volume of the grid cell, i.e. dz(k)*dx(i)*dx(i)
 
         if (i_day.gt.start_inj.and.i_day.le.stop_inj.and.i_max.gt.0) then
-            if (inj_swith.eq.1)  then
+            if (inj_switch.eq.1)  then
                 do ip = 1, par_max
-                    !do while ((par_name(ip).eq.get_brom_name("inj_var_name"))) 
                     if (par_name(ip).eq.get_brom_name("inj_var_name")) exit 
                     inj_num = ip+1           
                 end do 
-                !print *, "injection num", inj_num
-                cc(i_inj,k_inj,inj_num)=cc(i_inj,k_inj,inj_num)+86400.0_rk*dt*injection_rate/(dx(i_inj)*dx(i_inj)*dz(k_inj))
-                !cc(:,k_inj,inj_num)=cc(:,k_inj,inj_num)+86400.0_rk*dt*injection_rate/(dx(i_inj)*dx(i_inj)*dz(k_inj))          
+                cc(i_inj,k_inj,inj_num)=cc(i_inj,k_inj,inj_num)+86400.0_rk*dt*inj_rate/(dx(i_inj)*dx(i_inj)*dz(k_inj))
+                do ip = 1, par_max
+                    if (par_name(ip).eq.get_brom_name("inj_var_name2")) exit 
+                    inj_num = ip+1           
+                end do 
+                cc(i_inj,k_inj,inj_num)=cc(i_inj,k_inj,inj_num)+86400.0_rk*dt*inj_rate2/(dx(i_inj)*dx(i_inj)*dz(k_inj))
+                do ip = 1, par_max
+                    if (par_name(ip).eq.get_brom_name("inj_var_name3")) exit 
+                    inj_num = ip+1           
+                end do 
+                cc(i_inj,k_inj,inj_num)=cc(i_inj,k_inj,inj_num)+86400.0_rk*dt*inj_rate3/(dx(i_inj)*dx(i_inj)*dz(k_inj))
             end if 
         end if
         !________Check for NaNs (stopping if any found)____________________!
