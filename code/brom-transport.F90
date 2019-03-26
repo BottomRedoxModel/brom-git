@@ -38,22 +38,24 @@
 
     !Solution parameters to be read from brom.yaml (see brom.yaml for details)
     integer   :: i_min, i_water, i_max       !x-axis related 
-    integer   :: k_min, k_wat_bbl, k_bbl_sed !z-axis related
+    integer   :: k_min, k_wat_bbl, k_bbl_sed, k_wat_relax !z-axis related
     integer   :: k_points_below_water, k_max !z-axis related
     integer   :: par_max                     !no. BROM variables
-    integer   :: i_day, year, days_in_yr, freq_turb, freq_sed, last_day   !time related
+    integer   :: i_day, year, days_in_yr, freq_turb, freq_sed, freq_float, last_day   !time related
     integer   :: diff_method, kz_bbl_type, bioturb_across_SWI  !vertical diffusivity related
     integer   :: h_adv, h_relax, h_turb  !horizontal transport  (advection and relaxation) switches
     integer   :: use_Eair, use_hice, use_gargett ! use inut for light, ice, calculate Kz
     integer   :: input_type, port_initial_state, ncoutfile_type !I/O related
-    real(rk)  :: dt, water_layer_thickness
-    real(rk)  :: K_O2s, gargett_a0,gargett_q
+    integer   :: use_leak, i_leak, start_leak !leak related
+    real(rk)  :: dt, water_layer_thickness, cc_leak, cc_leak2, w_leak_adv
+    real(rk)  :: K_O2s, gargett_a0, gargett_q, mult_Kz
+
     character(len=64) :: icfile_name, outfile_name, ncoutfile_name
     character :: hmix_file
 
     !Forcings to be provided to FABM: These must have the POINTER attribute
     real(rk), pointer, dimension(:)            :: pco2atm, windspeed, hice
-    real(rk), pointer, dimension(:,:)          :: surf_flux, bott_flux, bott_source, Izt, pressure
+    real(rk), pointer, dimension(:,:)          :: surf_flux, bott_flux, bott_source, Izt, pressure, depth
     real(rk), pointer, dimension(:,:,:)        :: t, s, u_x
     real(rk), pointer, dimension(:,:,:)        :: vv, dvv, cc, cc_out, dcc, dcc_R, wbio
 
@@ -76,7 +78,7 @@
     real(rk), allocatable, dimension(:,:)      :: wCFL, w_b, u_b, wat_content
     real(rk), allocatable, dimension(:,:,:)    :: kz, kzti, fick, fick_per_day, sink, sink_per_day, bcpar_top, bcpar_bottom
     real(rk), allocatable, dimension(:,:,:)    :: kz_mol, pF1, pF2, wti, pWC
-    integer, allocatable, dimension(:)         :: is_solid, k_wat, k_sed, k_sed1
+    integer, allocatable, dimension(:)         :: is_solid, is_gas, k_wat, k_sed, k_sed1
     integer, allocatable, dimension(:,:)       :: bctype_top, bctype_bottom, hmixtype
     character(len=attribute_length), allocatable, dimension(:)    :: par_name
 
@@ -107,10 +109,12 @@
     dt = get_brom_par("dt")
     freq_turb = get_brom_par("freq_turb")
     freq_sed  = get_brom_par("freq_sed ")
+    freq_float  = get_brom_par("freq_float ")
     last_day = get_brom_par("last_day")
     water_layer_thickness = get_brom_par("water_layer_thickness")
     k_min = get_brom_par("k_min")
     k_wat_bbl = get_brom_par("k_wat_bbl")
+    k_wat_relax = get_brom_par("k_wat_relax")
     k_points_below_water = get_brom_par("k_points_below_water")
     i_min = get_brom_par("i_min") 
     i_water = get_brom_par("i_water") !Number of i for water column
@@ -135,6 +139,13 @@
     use_gargett = get_brom_par("use_gargett")
     gargett_a0 = get_brom_par("gargett_a0")
     gargett_q = get_brom_par("gargett_q")
+    mult_Kz = get_brom_par("mult_Kz")
+    use_leak = get_brom_par("use_leak")
+    i_leak = get_brom_par("i_leak")
+    start_leak = get_brom_par("start_leak")
+    w_leak_adv = get_brom_par("w_leak_adv")
+    cc_leak = get_brom_par("cc_leak")
+    cc_leak2 = get_brom_par("cc_leak2")
     !Initialize FABM model from fabm.yaml
     call fabm_create_model_from_yaml_file(model)
     par_max = size(model%state_variables)
@@ -155,6 +166,7 @@
     allocate(cc_top(i_max,par_max,days_in_yr))
     allocate(cc_bottom(i_max,par_max,days_in_yr))
     allocate(is_solid(par_max))
+    allocate(is_gas(par_max))
     allocate(hmixtype(i_max,par_max))
     allocate(rho(par_max))
 
@@ -237,11 +249,10 @@
         call input_netcdf_2(z_w, dz_w, hz_w, t_w, s_w, kz_w, Eair, use_Eair, &
         hice, use_hice, gargett_a0, gargett_q, use_gargett, &
         year, i_water, i_max, days_in_yr, k_wat_bbl, u_x_w)
+        kz_w=kz_w*mult_Kz
         write(*,*) "Done netcdf input"
         !Note: This uses the netCDF file to set z_w = layer midpoints, dz_w = increments between layer midpoints, hz_w = layer thicknesses
     end if
-    !## for Jossingfjord
-    k_wat_bbl= 6
         !Determine total number of vertical grid points (layers) now that k_wat_bbl is determined
     k_max = k_wat_bbl + k_points_below_water
 
@@ -285,6 +296,7 @@
     allocate(dvv(i_max,k_max,1))
     allocate(Izt(i_max,k_max))
     allocate(pressure(i_max,k_max))
+    allocate(depth(i_max,k_max))
     allocate(kzti(i_max,k_max+1,par_max))
     allocate(kztCFL(k_max-1,par_max))
     allocate(wCFL(k_max-1,par_max))
@@ -356,6 +368,7 @@
 
     !Link other data needed by FABM
     call fabm_link_bulk_data(model, standard_variables%downwelling_photosynthetic_radiative_flux, Izt)  !W m-2
+    call fabm_link_bulk_data(model, standard_variables%depth, depth)                                    !m
     call fabm_link_bulk_data(model, standard_variables%pressure, pressure)                              !dbar
     call fabm_link_horizontal_data(model, standard_variables%wind_speed, windspeed)                     !m s-1
     call fabm_link_horizontal_data(model, standard_variables%mole_fraction_of_carbon_dioxide_in_air, pco2atm)  !ppm
@@ -384,11 +397,14 @@
     !Establish which variables will be treated as solid phase in the sediments, based on the biological velocity (sinking/floating) from FABM.
     wbio = 0.0_rk
     call fabm_get_vertical_movement(model, i_water, i_water, k_wat_bbl, wbio(i_water:i_water,k_wat_bbl,:))
-    do i=i_min,i_water
+    do i=i_min,i_water-1
         wbio(i,:,:)=wbio(i_water,:,:)
     enddo
+!    wbio(i_min:(i_water-1),:,:)=wbio(i_water,:,:)
+
     wbio = -1.0_rk * wbio !FABM returns NEGATIVE wbio for sinking; sign change here means that wbio is POSITIVE for sinking
     is_solid = 0
+    is_gas = 0
     ip_sol = 0
     ip_par = 0
     write(*,*) "The following variables are assumed to join the solid phase in the sediments"
@@ -396,8 +412,11 @@
       do i=i_min,i_water
         if (wbio(i,k_wat_bbl,ip).gt.0.0_rk) then
             is_solid(ip) = 1 !Any variables that SINKS (wbio>0) in the bottom cell of the water column will become "solid" in the sediments
-            write(*,*) trim(par_name(ip))
+!            write(*,*) trim(par_name(ip))
             if (ip_par.eq.0) ip_par = ip !Set ip_par = index of first particulate variable
+        elseif (wbio(i,k_wat_bbl,ip).lt.0.0_rk) then
+            is_gas(ip) = 1 !Any variables that floats (wbio>1) in the bottom cell of the water column will become "solid" in the sediments
+!            write(*,*) trim(par_name(ip))           
         else
             if (ip_sol.eq.0) ip_sol = ip !Set ip_par = index of first solute variable
         end if
@@ -453,7 +472,7 @@
         end do
     !endif
     
-    open(8,FILE = 'temp.dat')
+    open(8,FILE = 'burying_rate.dat')
     !Set constant forcings
     wind_speed = get_brom_par("wind_speed")    ! 10m wind speed [m s-1]
     pco2_atm   = get_brom_par("pco2_atm")      ! CO2 partical pressure [ppm]
@@ -473,7 +492,7 @@
 
     !Executes the offline vertical transport model BROM-transport
 
-    use calculate, only: calculate_light, calculate_phys, calculate_sed, calculate_sed_eya
+    use calculate, only: calculate_light, calculate_phys, calculate_sed, calculate_sed_eya, calculate_bubble
 
     implicit none
 
@@ -494,7 +513,8 @@
     real(rk)     :: a1_bioirr                        !to detect whether or not bioirrigation is activated
     real(rk)     :: hmix_rate_uniform                !uniform horizontal relaxation if prescribed
     real(rk)     :: fresh_PM_poros                   ! porosity of fresh precipitated PM (i.e. dVV) 
-    real(rk)     :: w_binf                   ! 
+    real(rk)     :: w_binf                   ! baseline rate of burying
+    real(rk)     :: N_bubbles                ! Nimber of floating up bubbles
     real(rk)     :: bu_co                   ! "Burial coeficient" for setting velosity exactly to the SWI proportional to the 
                                            !   settling velocity in the water column (0<bu_co<1), 0 - for no setting velosity, (nd)
     real(rk)     :: injection_rate                   ! injection rate
@@ -510,6 +530,7 @@
     constant_w_sed = get_brom_par("constant_w_sed")
     fresh_PM_poros = get_brom_par("fresh_PM_poros")
     w_binf = get_brom_par("w_binf")
+    N_bubbles = get_brom_par("N_bubbles")
     bu_co = get_brom_par("bu_co")
     cc0 = get_brom_par("cc0")
     a1_bioirr = get_brom_par("a1_bioirr")
@@ -558,7 +579,7 @@
         julianday = i_day - int(i_day/days_in_yr)*days_in_yr + 1    !"julianday" (1,2,...,days_in_yr)
         if (julianday==1) model_year = model_year + 1
 
-        write (*,'(a, i4, a, i4, a, f8.4)') " model year:", model_year, "; julianday:", julianday,"; w_sed (cm/yr):", wti(1,k_bbl_sed+2,1)*365.*8640000.
+        write (*,'(a, i4, a, i4, a, f9.4)') " model year:", model_year, "; julianday:", julianday,"; w_sed (cm/yr):", wti(1,k_bbl_sed+2,1)*365.*8640000.
         !Calculate Izt = <PAR(z)>_24hr for this day
         do i=i_min, i_water
             call calculate_light(julianday, i, k_bbl_sed, k_max, par_max, hz, Eair, use_Eair, hice, use_hice, cc, is_solid, rho, Izt)
@@ -604,20 +625,21 @@
         !numerically more demanding than the biogeochemistry (hence freq_turb, freq_sed >= 1) (Butenschon et al., 2012)
 
         do id=1,idt
-            dVV(:,:,1)=0.0
+
         !_______vertical diffusion________!
             do i=i_min, i_water
                 call calculate_phys(i, k_max, par_max, model, cc, kzti, fick, dcc, bctype_top, bctype_bottom, bc_top, bc_bottom, &
                     surf_flux, bott_flux, bott_source, k_bbl_sed, dz, hz, kz, kz_mol, kz_bio, julianday, id_O2, K_O2s, dt, freq_turb, &
                     diff_method, cnpar, surf_flux_with_diff,bott_flux_with_diff, bioturb_across_SWI, pF1, pF2, phi_inv, is_solid, cc0)
                                 
-                    k=k_bbl_sed
-                do ip=1,par_max !Sum over contributions from each particulate variable
-                    if (is_solid(ip).eq.1) then
-                        dVV(i,k,1)= dVV(i,k,1)+(fick(i,k,ip)-fick(i,k,ip))/rho(ip) ! dcc(i,k-1,ip)/rho(ip) should be 
-                    endif
-                enddo
+!                    k=k_bbl_sed
+!                do ip=1,par_max !Sum over contributions from each particulate variable
+!                    if (is_solid(ip).eq.1) then
+!                        dVV(i,k,1)= dVV(i,k,1)+(fick(i,k,ip)-fick(i,k,ip))/rho(ip) ! dcc(i,k-1,ip)/rho(ip) should be 
+!                    endif
+!                enddo
             enddo
+
         !_______bioirrigation_____________!
             if (a1_bioirr.gt.0.0_rk) then
                 do i=i_min, i_water
@@ -648,13 +670,14 @@
                     end do
                 enddo
             end if
+
             !_____water_biogeochemistry_______!
             dcc = 0.0_rk
             do i=i_min, i_water
                 do k=1,k_max
-                call fabm_do(model, i, i, k, dcc(i:i,k,:))   !to ask Jorn
+                    call fabm_do(model, i, i, k, dcc(i:i,k,:))   !to ask Jorn
                 !Note: We MUST pass the range "i:i" to fabm_do -- a single value "i" will produce compiler error
-            end do
+                end do
             !Add surface and bottom fluxes if treated here
             if (surf_flux_with_diff.eq.0) then
                 surf_flux = 0.0_rk
@@ -692,19 +715,8 @@
             end do
             cc(i,:,:) = max(cc0, cc(i,:,:)) !Impose resilient concentration
             enddo
-        !_______Calculate changes of volumes of cells_________!
-        do i=i_min, i_water
-            k=k_bbl_sed
-           do ip=1,par_max !Sum over contributions from each particulate variable
-              if (is_solid(ip).eq.1) then
-              !change of Volume of a cell as a function of biology and sinking
-                dVV(i,k,1)= dVV(i,k,1)+(dcc_R(i,k,ip)+sink(i,k-1,ip))/rho(ip)
-!               dVV(i,k,1)= dVV(i,k,1)+(dcc_R(i,k,ip)+sink(i,k-1,ip)-sink(i,k,ip))/rho(ip)
-              end if
-           end do
-        enddo
-       if (id.eq.1) write (8,'(a, i4, a, i4, a, e)') " model year:", model_year, "; julianday:", julianday, "; dVV(k_bbl_sed):", dVV(1,k_bbl_sed,1)
-       !_______Particles sinking_________!
+
+        !_______Particles sinking_________!
         do i=i_min, i_water
             if(model_w_sed.ge.1) then
                 call calculate_sed(i, k_max, par_max, model, cc, wti, sink, dcc, dcc_R, bctype_top, bctype_bottom, &
@@ -719,6 +731,32 @@
                 id_O2, dphidz_SWI, cc0, bott_flux, bott_source, w_binf, bu_co)
             endif
         enddo
+
+       !_______Bubble rising_________!
+        do i=i_min, i_water
+            call calculate_bubble(i, k_max, par_max, model, cc, sink, N_bubbles, &
+                dcc, hz, dz, z, t, k_bbl_sed, julianday, dt, freq_float, &
+               is_gas, wbio, cc0)
+        enddo
+
+       !_______Calculate changes of volumes of cells_________!
+        dVV(:,:,1)=0.0
+        do i=i_min, i_water
+            k=k_bbl_sed
+           do ip=1,par_max !Sum over contributions from each particulate variable
+              if (is_solid(ip).eq.1) then
+              !change of Volume of a cell as a function of biology and sinking
+                dVV(i,k,1)= dVV(i,k,1)+(sink(i,k-1,ip))/rho(ip)
+!               dVV(i,k,1)= dVV(i,k,1)+(dcc_R(i,k,ip)+sink(i,k-1,ip))/rho(ip)
+!               dVV(i,k,1)= dVV(i,k,1)+(dcc_R(i,k,ip)+sink(i,k-1,ip)-sink(i,k,ip))/rho(ip)
+              end if
+           end do
+        enddo
+          if (id.eq.1) write (8,'(a, i8,a, i4, a, i4, a, e, a, e, a, e)') " i_day:", &
+              i_day, " model_year:", model_year, "; julianday:", julianday, &
+              "; dVV(k_bbl_sed):", dVV(1,k_bbl_sed,1), "; w_sed(cm/yr):", &
+              wti(1,k_bbl_sed+2,1)*365.*8640000., ";sink_of_POML:" , sink(i,k_bbl_sed-1,12)        
+        
         !________Horizontal relaxation_________!
         if (h_relax.eq.1) then          
             dcc = 0.0_rk
@@ -728,7 +766,7 @@
                         !Calculate tendency dcc (water column only)
                         dcc(i,:,ip) = 0.5 * hmix_rate(i,:,julianday)*2.0_rk*(cc_hmix(i,ip,:,julianday)-cc(i,:,ip))/dx(i)/dx(i)
                         !Update concentration (water column only)
-                        do k=1,k_wat_bbl
+                        do k=1,k_wat_relax
                             cc(i,k,ip) = cc(i,k,ip) + dt*dcc(i,k,ip)
                         end do
                         cc(i,:,ip) = max(cc0, cc(i,:,ip)) !Impose resilient concentration
@@ -773,10 +811,29 @@
                 enddo        
             enddo          
         endif
+        !________Vertical advection in the sediments due to leak_________
+        if (use_leak.gt.0.and.i_day.gt.start_leak) then          
+            dcc = 0.0_rk
+            cc(i_leak,k_max,id_DIC)=cc_leak
+            cc(i_leak,k_max,id_H2S)=cc_leak2
+                do ip=1,par_max
+                   if (is_solid(ip).ne.1) then
+                        !Calculate tendency dcc (liquids in the sediment  only)
+                        do k=k_wat_bbl,k_max-1
+                          dcc(i_leak,k,ip) = -w_leak_adv*(cc(i_leak,k,ip)-cc(i_leak,k+1,ip))/hz(k)
+                        enddo
+                        do k=k_wat_bbl,k_max-1
+                          cc(i_leak,k,ip) = cc(i_leak,k,ip) + dt*dcc(i_leak,k,ip)
+                        end do
+!                        cc(i_leak,:,ip) = max(cc0, cc(i_leak,:,ip)) !Impose resilient concentration
+                    endif
+                end do
+!            enddo
+        endif
         !________Injection____________________!
         !            !Source of "acetate" 1292 mmol/sec, should be devided to the volume of the grid cell, i.e. dz(k)*dx(i)*dx(i)
-
         if (i_day.gt.start_inj.and.i_day.le.stop_inj.and.i_max.gt.0) then
+!          if (id.gt.3667) then
             if (inj_swith.eq.1)  then
                 do ip = 1, par_max
                     !do while ((par_name(ip).eq.get_brom_name("inj_var_name"))) 
@@ -787,6 +844,7 @@
                 cc(i_inj,k_inj,inj_num)=cc(i_inj,k_inj,inj_num)+86400.0_rk*dt*injection_rate/(dx(i_inj)*dx(i_inj)*dz(k_inj))
                 !cc(:,k_inj,inj_num)=cc(:,k_inj,inj_num)+86400.0_rk*dt*injection_rate/(dx(i_inj)*dx(i_inj)*dz(k_inj))          
             end if 
+!          endif  
         end if
         !________Check for NaNs (stopping if any found)____________________!
         do ip=1,par_max
@@ -987,7 +1045,7 @@
     deallocate(cc_out)
     deallocate(dcc)
     deallocate(vv)
-    deallocate(dvv)
+    deallocate(dVV)
     deallocate(fick)
     deallocate(fick_per_day)
     deallocate(sink)

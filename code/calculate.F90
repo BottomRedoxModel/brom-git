@@ -22,7 +22,7 @@
 
     implicit none
     private
-    public calculate_light, calculate_phys, calculate_sed, calculate_sed_eya
+    public calculate_light, calculate_phys, calculate_sed, calculate_sed_eya, calculate_bubble
 
 
     contains
@@ -720,38 +720,34 @@
 !        i = real(i)
         call fabm_get_vertical_movement(model, i, i, k, wbio(i:i,k,:))  !Note: wbio is on layer midpoints
     end do
-    wbio = -1.0_rk * wbio !FABM returns NEGATIVE wbio for sinking; sign change here means that wbio is POSITIVE for sinking
+    wbio = -1.0_rk*wbio !FABM returns NEGATIVE wbio for sinking; sign change
+    ! here means that wbio is POSITIVE for sinking; we also make zero wbio for bubbles floating
 
     ! wti() at water column layer midpoints including Air-sea interface (unused) 
     !    and not including SWI:  (as wbio in FABM) 
-        wti(i,1:k_bbl_sed,:) = wbio(i,1:k_bbl_sed,:) 
+        wti(i,1:k_bbl_sed,:) = max(0.0_rk,wbio(i,1:k_bbl_sed,:))
         wti(i,1,:) = 0.0_rk
 
     if (constant_w_sed.ne.0) then  ! case constant burial velosity
         
     ! wti() at sediment layer midpoints: w_b, backgound burying velocity
-        do k=k_bbl_sed,k_max
-            do ip=1,par_max
-                if (is_solid(ip).eq.0) then
-                    wti(i,k,ip) = w_binf
-                else
-                    wti(i,k,ip) = w_binf
-                end if
-            enddo
+    do k=k_bbl_sed,k_max+1
+        do ip=1,par_max
+           wti(i,k,ip) = w_binf
         enddo
-        wti(i,k_max+1,:) = wti(i,k_max,:)
+    enddo
     
-    ! Apply "Burial coeficient" to make wti () exactly to the SWI proportional to the
+    ! Apply "Burial coeficient" to increase wti () exactly to the SWI at proportional to the
     !    settling velocity in the water column (0<bu_co<1)
     do ip=1,par_max
-          wti(i,k_bbl_sed,ip) = bu_co*wti(i,k_bbl_sed-1,ip)
+          wti(i,k_bbl_sed,ip) = wti(i,k_bbl_sed,ip) + bu_co*wti(i,k_bbl_sed-1,ip)
     end do
     
     endif
     
     if (dynamic_w_sed.ne.0) then ! case  burial velosity depending on particles accumulation above SWI
     ! we accelerate burying rate due to an increase of particles volume dVV()[m3/sec] in water layer just above SWI
-        do k=1,k_max !        do k=k_bbl_sed,k_max
+        do k=k_bbl_sed,k_max
             do ip=1,par_max
 !                wti(i,k,ip) = wti(i,k,ip) + max(0.0_rk,dVV(i,k_bbl_sed,1))/fresh_PM_poros !/dz(k_bbl_sed)
                 wti(i,k,ip) = wti(i,k,ip) + max(0.0_rk,dVV(i,k_bbl_sed,1))*dz(k_bbl_sed)/(1.0_rk-fresh_PM_poros) ! newer from Berre
@@ -812,8 +808,95 @@
         cc(i,:,:) = max(cc0, cc(i,:,:)) !Impose resilient concentration
     end do
 
-    end subroutine calculate_sed_eya
+        end subroutine calculate_sed_eya
 !=======================================================================================================================
+        
+        
+        
+        
+!=======================================================================================================================
+    subroutine calculate_bubble(i, k_max, par_max, model, cc, sink, N_bubbles, &
+        dcc, hz, dz, z, t, k_bbl_sed, julianday, dt, freq_float, is_gas, wbio, cc0)
+
+    !Calculates floating of bubbles in the water column and sediments
+
+    use fabm, only: type_model, fabm_get_vertical_movement, fabm_do_bottom 
+
+    implicit none
+
+    !Input variables
+    integer, intent(in)                         :: k_max, par_max, julianday, freq_float
+    integer, intent(in)                         :: k_bbl_sed
+    integer, dimension(:), intent(in)           :: is_gas 
+    real(rk), dimension(:), intent(in)          :: hz, dz, z
+    real(rk), dimension(:,:,:), intent(in)      :: t
+    real(rk), intent(in)                        :: dt, cc0, N_bubbles
+
+    !Output variables
+    real(rk), dimension(:,:,:), intent(out)     :: wbio
+    real(rk), dimension(:,:,:), intent(out)     :: sink, dcc
+ !   real(rk), dimension(:,:), intent(out)       :: bott_flux, bott_source
+ 
+    !Input/output variables
+    type (type_model), intent(inout)            :: model
+    real(rk), dimension(:,:,:), intent(inout)   :: cc
+
+    !Local variables
+    real(rk) :: dtt, rb, wbub
+    integer  :: i, k, ip, idf
+
+    dtt = 86400.0_rk*dt/freq_float !Sedimentation model time step [seconds]
+    dcc = 0.0_rk
+!    sink(i,:,:) = 0.0_rk
+    !Compute vertical velocity in water column (sinking/floating) using the FABM.
+    wbio = 0.0_rk
+    do k=1,k_max
+        call fabm_get_vertical_movement(model, i, i, k, wbio(i:i,k,:))  !Note: wbio is on layer midpoints
+    end do
+    wbio = -1.0_rk * wbio !FABM returns NEGATIVE wbio for sinking; sign change here means that wbio is POSITIVE for sinking
+    ! Perform rise advective flux calculation and cc update
+    ! This uses a simple first order upwind differencing scheme (FUDM)
+    ! It uses the fluxes sink in a consistent manner and therefore conserves mass
+    wbub= 0.0_rk
+
+    do ip=1,par_max
+      if (is_gas(ip).eq.1) then
+        do idf=1,freq_float
+    !Calculate floating fluxes at layer interfaces (sink, units strictly [mass/unit total area/second])
+          do k=1,k_max-1
+            rb = 100._rk * &     !bubble radius in cm (details in brom_bubble)
+                (cc(i,k,ip)*0.001_rk*8.314_rk*(273.15_rk+t(i,k,julianday))/(101325.0_rk &
+                +z(k)*101325.0_rk/10.3_rk) &                        ! Volume of gas
+                /N_bubbles*3.0_rk/4.0_rk/3.14159_rk)**(1.0_rk/3.0_rk)
+            if(rb.gt.0.0000001) then
+              if (rb.lt.0.4) then
+                wbub=    -(22.16_rk+0.733_rk*(rb-0.0000000584_rk)**(-0.0849_rk)) &   ! rate of rise
+                         *exp(4.792e-4_rk*t(i,k,julianday)*(rb-0.0000000584_rk)**(-0.815_rk)) &
+                         /100._rk !into m/s          
+              else
+                wbub= -19.16_rk/100._rk !into m/s
+              endif
+                if(wbub.lt.wbio(i,k,ip)) wbub=wbio(i,k,ip)
+                if(wbub.gt.0.0) wbub=0.0_rk
+            endif
+            sink(i,k,ip) = -((100000.0_rk*wbub)*cc(i,k,ip))/100000.0_rk
+          end do
+    !Calculate tendencies dcc = dcc/dt = -dF/dz on layer midpoints (top/bottom not used where Dirichlet bc imposed)
+          do k=1,k_max-1
+            dcc(i,k,ip) = (sink(i,k+1,ip)-sink(i,k,ip))/hz(k) !-1)
+          end do
+    !Integrate cc() on layer midpoints 
+          do k=2,(k_max-1)
+            cc(i,k,ip) = cc(i,k,ip) + dtt*dcc(i,k,ip)
+          end do
+        enddo
+      endif
+    enddo
+    !Impose resilient concentration
+    cc(i,:,:) = max(cc0, cc(i,:,:)) 
+
+    end subroutine calculate_bubble
+!===================================================================================
 
 
     end module calculate
