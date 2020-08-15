@@ -41,7 +41,7 @@
 
     public find_index, porting_initial_state_variables, init_common, saving_state_variables, saving_state_variables_diag,&
            get_brom_par, get_brom_name, svan, make_vert_grid, input_primitive_physics, input_ascii_physics, &
-           make_physics_bbl_sed
+           make_physics_bbl_sed, make_physics_bbl_sed_old
 
     contains
 
@@ -318,12 +318,12 @@
             end do
             read(9, '( 1x,f15.9 )', advance = 'no') vv(i,k,1)
             do ip=1,par_max
-                read(9, '( 1x, f16.9 )', advance = 'no') value
+                read(9, '( 1x, f17.9 )', advance = 'no') value
                 if (ip /= -1) then
                     if (value /= 0.) then
                         cc(i,k,ip) = value
                     else
-                        cc(i,k,ip) = 0.0001
+                        cc(i,k,ip) = 0.000
                     end if
                 end if
             end do
@@ -467,7 +467,7 @@
             write(10,'(1x,f15.9)',advance='NO') hz(k)
             write(10,'(1x,f15.9)',advance='NO') vv(i,k,1)
             do ip=1,par_max
-                write(10,'(1x,f16.9)',advance='NO') cc(i,k,ip)
+                write(10,'(1x,f17.9)',advance='NO') cc(i,k,ip)
             end do
             write(10,*)
         end do
@@ -569,6 +569,7 @@
             hz(k)=hz(k)-hz_sed_min  !here we add one thin (hz_sed_min) layer above the SWI
             hz(k+1)=hz_sed_min
             k_bbl_sed = k+1
+!            k_bbl_sed = k
             goto 1
         end if
     end do
@@ -610,13 +611,13 @@
 
 
 !=======================================================================================================================
-    subroutine input_primitive_physics(z_w, dz_w, hz_w, k_wat_bbl, water_layer_thickness, t_w, s_w, kz_w, i_water, i_max, days_in_yr)
+    subroutine input_primitive_physics(z_w, dz_w, hz_w, k_wat_bbl, water_layer_thickness, t_w, s_w, kz_w, i_max, days_in_yr)
 
     !Constructs (temperature, salinity, diffusivity) forcings for the water column assuming a simple hydrophysical scenario
     !with hypothetical sinusoidal variations
 
     !Input variables
-    integer, intent(in)                                :: k_wat_bbl, i_water, i_max, days_in_yr
+    integer, intent(in)                                :: k_wat_bbl, i_max, days_in_yr
     real(rk), intent(in)                               :: water_layer_thickness
 
     !Output variables
@@ -663,18 +664,18 @@
     !Seasonal variability of T and S
     do iday=1,days_in_yr
         do k=1,k_wat_bbl
-            s_w(i_water,k,iday) = sal_win(k)+0.5*(1.+sin(2*3.14*(iday+240.)/365.))*(sal_sum(k)-sal_win(k))
-            t_w(i_water,k,iday) = tem_win(k)+0.5*(1.+sin(2*3.14*(iday+240.)/365.))*(tem_sum(k)-tem_win(k))
+            s_w(i_max,k,iday) = sal_win(k)+0.5*(1.+sin(2*3.14*(iday+240.)/365.))*(sal_sum(k)-sal_win(k))
+            t_w(i_max,k,iday) = tem_win(k)+0.5*(1.+sin(2*3.14*(iday+240.)/365.))*(tem_sum(k)-tem_win(k))
         enddo
     enddo
 
     !Calculate  vertical turbulent coefficient Kz from density (Gargett)
     do iday=1,days_in_yr
         do k=1, k_wat_bbl
-            call svan(s_w(i_water,k,iday),t_w(i_water,k,iday),z_w(k),dens(k)) !calculate density as f(p,t,s)
+            call svan(s_w(i_max,k,iday),t_w(i_max,k,iday),z_w(k),dens(k)) !calculate density as f(p,t,s)
         end do
         do k=1, k_wat_bbl-1
-            Kz_w(i_water,k,iday)=0.5E-6 /&
+            Kz_w(i_max,k,iday)=0.5E-6 /&
                 ((9.81/(1000.+(dens(k)+dens(k+1))/2.)&
                 *(abs(dens(k+1)-dens(k))/dz_w(k)) &
                 )**0.5)
@@ -688,7 +689,7 @@
             do k=1,k_wat_bbl
                 write(12,'(2(1x,i4))',advance='NO') iday, k
                 do i=1,i_max
-                    write (12,'(1x,i4, 2(1x,f8.4),1x,f15.11,2f7.3)',advance='NO') i, t_w(i_water,k,iday), s_w(i_water,k, iday), kz_w(i_water,k,iday), dz_w(k), z_w(k)
+                    write (12,'(1x,i4, 2(1x,f8.4),1x,f15.11,2f7.3)',advance='NO') i, t_w(i_max,k,iday), s_w(i_max,k, iday), kz_w(i_max,k,iday), dz_w(k), z_w(k)
                 end do
                 write(12,*)
            end do
@@ -705,12 +706,12 @@
 
 
 !=======================================================================================================================
-    subroutine input_ascii_physics(z_w, dz_w, hz_w, k_wat_bbl, water_layer_thickness, t_w, s_w, kz_w, i_water, i_max, days_in_yr)
+    subroutine input_ascii_physics(z_w, dz_w, hz_w, k_wat_bbl, water_layer_thickness, t_w, s_w, kz_w, i_max, days_in_yr)
 
     !Constructs (temperature, salinity, diffusivity) forcings for water column using input physics in ascii format
 
     !Input variables
-    integer, intent(in)                                     :: k_wat_bbl, i_water, i_max, days_in_yr
+    integer, intent(in)                                     :: k_wat_bbl, i_max, days_in_yr
     real(rk), intent(in)                                    :: water_layer_thickness
 
     !Output variables
@@ -720,8 +721,8 @@
     !Local variables
     real(rk), allocatable, dimension(:)                     :: sal_sum, sal_win, tem_sum, tem_win, dens
     integer                                                 :: i, j, k, iday, k_max_TEL
-    real(rk) :: tem_TEL(55,365), sal_TEL(55,365), kz_TEL(55,365) ! this is for TELEMARK model outputs for Berre
-!    real(rk) :: tem_TEL(100,365), sal_TEL(100,365), kz_TEL(100,365) ! this is for TELEMARK model outputs for Berre
+!    real(rk) :: tem_TEL(55,365), sal_TEL(55,365), kz_TEL(55,365) ! this is for TELEMARK model outputs for Berre
+    real(rk) :: tem_TEL(100,365), sal_TEL(100,365), kz_TEL(100,365) ! this is for TELEMARK model outputs for Berre
 
     !Allocate local variables
     allocate(sal_sum(k_wat_bbl))
@@ -737,7 +738,7 @@
     allocate(kz_w(i_max,k_wat_bbl,days_in_yr))
 
 !!! HERE THE USER MUST ADAPT FOR HIS/HER PARTICULAR APPLICATION --------------------------------------------------------
-!    goto 2
+    goto 2
 !
 1   continue ! CASE BERRE:
 !
@@ -772,75 +773,75 @@
     close(20)
     do iday=1,days_in_yr
         do k=1,k_wat_bbl
-            s_w(i_water,k,iday) = sal_TEL(k,iday)
-            t_w(i_water,k,iday) = tem_TEL(k,iday)
+            s_w(i_max,k,iday) = sal_TEL(k,iday)
+            t_w(i_max,k,iday) = tem_TEL(k,iday)
         enddo
     enddo
 
     !Calculate  vertical turbulent coefficient Kz from density (Gargett)
     do iday=1,days_in_yr
         do k=1, k_wat_bbl
-            call svan(s_w(i_water,k,iday),t_w(i_water,k,iday),z_w(k),dens(k)) !calculate density as f(p,t,s)
+            call svan(s_w(i_max,k,iday),t_w(i_max,k,iday),z_w(k),dens(k)) !calculate density as f(p,t,s)
         end do
         do k=1, k_wat_bbl-1
-            Kz_w(i_water,k,iday)=0.5E-6 /&
+            Kz_w(i_max,k,iday)=0.5E-6 /&
                 ((9.81/(1000.+(dens(k)+dens(k+1))/2.)&
                 *(abs(dens(k+1)-dens(k))/dz_w(k)) &
                 )**0.5)
         end do
-            Kz_w(i_water,k_wat_bbl,iday)=Kz_w(i_water,k_wat_bbl-1,iday)
+            Kz_w(i_max,k_wat_bbl,iday)=Kz_w(i_max,k_wat_bbl-1,iday)
     end do
 !---end  CASE BERRE-----------------------------------------------------------------------------------------------------
-!2 continue ! CASE SPANGEREID:
-!!
-!! The code below is provided as an example, reading (T,S) data from an ascii file of interpolated output from NODC 
-!! from the North Sea and using the resulting seawater density to compute Kz for a particular application (Spangereid)
-!!____________________________________________________________________
-!    !Make grid parameters assuming uniform grid defined by water_layer_thickness and k_wat_bbl in brom.yaml
-!    hz_w = water_layer_thickness/k_wat_bbl
-!    dz_w = hz_w
-!    z_w(1) = 0.5_rk*hz_w(1)
-!    do k=2,k_wat_bbl
-!        z_w(k) = z_w(k-1) + dz_w(k-1)
-!    end do
+2 continue ! CASE SPANGEREID:
 !
-!    !Read (T,S) data for Berre
-!    k_max_TEL= 100
-!    open(19, file='spa_t.dat')
-!    do j=1,k_max_TEL
-!        do i=1,days_in_yr
-!            read(19, *) k,k,tem_TEL(j,i) ! measured and interpolated data from TELEMARC model
-!        end do
-!    end do
-!    close(19)
-!    open(20, file='spa_s.dat')
-!    do j=1,k_max_TEL
-!        do i=1,days_in_yr
-!            read(20, *) k,k,sal_TEL(j,i) ! measured and interpolated data from TELEMARC model
-!        end do
-!    end do
-!    close(20)
-!    do iday=1,days_in_yr
-!        do k=1,k_wat_bbl
-!            s_w(i_water,k,iday) = sal_TEL(k,iday)
-!            t_w(i_water,k,iday) = tem_TEL(k,iday)
-!        enddo
-!    enddo
-!
-!    !Calculate  vertical turbulent coefficient Kz from density (Gargett)
-!    do iday=1,days_in_yr
-!        do k=1, k_wat_bbl
-!            call svan(s_w(i_water,k,iday),t_w(i_water,k,iday),z_w(k),dens(k)) !calculate density as f(p,t,s)
-!        end do
-!        do k=1, k_wat_bbl-1
-!            Kz_w(i_water,k,iday)=1.0E-5 /& !0.5E-4
-!                ((9.81/(1000.+(dens(k)+dens(k+1))/2.)&
-!                *(abs(dens(k+1)-dens(k))/dz_w(k)) &
-!                )**0.4)
-!        end do
-!            Kz_w(i_water,k_wat_bbl,iday)=Kz_w(i_water,k_wat_bbl-1,iday)
-!    end do
-!!!---end  CASE SPANGEREID--------------------------------------------------------------------------------------------------
+! The code below is provided as an example, reading (T,S) data from an ascii file of interpolated output from NODC 
+! from the North Sea and using the resulting seawater density to compute Kz for a particular application (Spangereid)
+!____________________________________________________________________
+    !Make grid parameters assuming uniform grid defined by water_layer_thickness and k_wat_bbl in brom.yaml
+    hz_w = water_layer_thickness/k_wat_bbl
+    dz_w = hz_w
+    z_w(1) = 0.5_rk*hz_w(1)
+    do k=2,k_wat_bbl
+        z_w(k) = z_w(k-1) + dz_w(k-1)
+    end do
+
+    !Read (T,S) data for Berre
+    k_max_TEL= 100
+    open(19, file='spa_t.dat')
+    do j=1,k_max_TEL
+        do i=1,days_in_yr
+            read(19, *) k,k,tem_TEL(j,i) ! measured and interpolated data from TELEMARC model
+        end do
+    end do
+    close(19)
+    open(20, file='spa_s.dat')
+    do j=1,k_max_TEL
+        do i=1,days_in_yr
+            read(20, *) k,k,sal_TEL(j,i) ! measured and interpolated data from TELEMARC model
+        end do
+    end do
+    close(20)
+    do iday=1,days_in_yr
+        do k=1,k_wat_bbl
+            s_w(i_max,k,iday) = sal_TEL(k,iday)
+            t_w(i_max,k,iday) = tem_TEL(k,iday)
+        enddo
+    enddo
+
+    !Calculate  vertical turbulent coefficient Kz from density (Gargett)
+    do iday=1,days_in_yr
+        do k=1, k_wat_bbl
+            call svan(s_w(i_max,k,iday),t_w(i_max,k,iday),z_w(k),dens(k)) !calculate density as f(p,t,s)
+        end do
+        do k=1, k_wat_bbl-1
+            Kz_w(i_max,k,iday)=1.0E-5 /& !0.5E-4
+                ((9.81/(1000.+(dens(k)+dens(k+1))/2.)&
+                *(abs(dens(k+1)-dens(k))/dz_w(k)) &
+                )**0.4)
+        end do
+            Kz_w(i_max,k_wat_bbl,iday)=Kz_w(i_max,k_wat_bbl-1,iday)
+    end do
+!---end  CASE SPANGEREID--------------------------------------------------------------------------------------------------
 
     
     
@@ -853,33 +854,34 @@
 
 
 !=======================================================================================================================
-    subroutine make_physics_bbl_sed(t, s, kz, hmix_rate, cc_hmix, t_w, s_w, kz_w, hmix_rate_w, cc_hmix_w, kz_mol, kz_bio, &
-        z, dz, hz, i_min, i_max, i_water, k_wat_bbl, k_bbl_sed, k_max, par_max, days_in_yr, alpha, is_solid, phi, phi1, phi_inv, &
+    subroutine make_physics_bbl_sed(t, s, kz, hmix_rate, cc_hmix, u_x, u_x_w, t_w, s_w, kz_w, cc_hmix_w, kz_mol, kz_bio, &
+        z, dz, hz, i_min, i_max, k_wat_bbl, k_bbl_sed, k_max, par_max, steps_in_yr, alpha, is_solid, phi, phi1, phi_inv, &
         pF1, pF2, mu0_musw, tortuosity, w_b, u_b, rho, dt, freq_turb, par_name, diff_method, bioturb_across_SWI, &
-        ip_sol, ip_par, dphidz_SWI, wat_content,pWC)
-
+        ip_sol, ip_par, dphidz_SWI, wat_content, pWC, input_step)
+    
     !Constructs profiles for (temperature, salinity, vertical diffusivity etc.) for the full column (water + sediments)
     !given water column variability and parameters from brom.yaml
 
     !Input variables
-    integer, intent(in)                       :: i_min, i_max, i_water, k_wat_bbl, k_bbl_sed, k_max, par_max, days_in_yr, freq_turb
+    integer, intent(in)                       :: i_min, i_max, k_wat_bbl, k_bbl_sed, k_max, par_max, freq_turb
     integer, intent(in)                       :: diff_method, bioturb_across_SWI, ip_sol, ip_par
+    integer                                   :: input_step, steps_in_yr
     integer, dimension(:), intent(in)         :: is_solid
     real(rk), intent(in)                      :: dt
     real(rk), dimension(:), intent(in)        :: z, dz, hz
-    real(rk), dimension(:,:,:), intent(in)    :: t_w, s_w, kz_w, hmix_rate_w
+    real(rk), dimension(:,:,:), intent(in)    :: t_w, s_w, kz_w, u_x_w
     real(rk), dimension(:,:,:,:), intent(in)  :: cc_hmix_w
     character(len=attribute_length), dimension(:), intent(in) :: par_name
-
+    
     !Output variables
     real(rk)                                  :: mu0_musw, dphidz_SWI
     real(rk), dimension(:), intent(out)       :: rho
     real(rk), dimension(:,:), intent(out)     :: kz_bio, alpha, phi, phi_inv, tortuosity, w_b, u_b, wat_content
-    real(rk), dimension(:,:,:), intent(out)   :: t, s, kz, hmix_rate, kz_mol, pF1, pF2, pWC
+    real(rk), dimension(:,:,:), intent(out)   :: t, s, kz, u_x, hmix_rate, kz_mol, pF1, pF2, pWC
     real(rk), dimension(:,:,:,:), intent(out) :: cc_hmix
 
     !Local variables
-    integer                                   :: i, k, iday, ip, sel
+    integer                                   :: i, k, ip, sel, iday, istep
     integer                                   :: k_sed(k_max-k_bbl_sed), k_sed1(k_max+1-k_bbl_sed), k_bbl1(k_bbl_sed-k_wat_bbl)
     real(rk)                                  :: z_wat_bbl, z_bbl_sed, kz_gr, z1(k_max+1), z_s1(k_max+1), phi1(i_max,k_max+1)
     integer                                   :: kz_bbl_type, dynamic_kz_bbl
@@ -887,7 +889,336 @@
     real(rk)                                  :: a1_bioirr, a2_bioirr
     real(rk)                                  :: kz_bioturb_max, z_const_bioturb, z_decay_bioturb
     real(rk)                                  :: phi_0, phi_inf, z_decay_phi, w_binf, rho_def, wat_con_0, wat_con_inf
-    real(rk)                                  :: kzCFL(k_bbl_sed-1,days_in_yr), kz_molCFL(k_max-1,par_max)
+    real(rk)                                  :: kzCFL(k_bbl_sed-1,steps_in_yr), kz_molCFL(k_max-1,par_max)
+
+    write(*,*) "Sed 1"
+
+    !!Get diffusivity parameters from brom.yaml
+    !Turbulence in the benthic boundary layer
+    kz_bbl_type = get_brom_par("kz_bbl_type")
+    kz_bbl_max = get_brom_par("kz_bbl_max")
+    dbl_thickness = get_brom_par("dbl_thickness")
+    dynamic_kz_bbl = get_brom_par("dynamic_kz_bbl")
+    write(*,*) "Sed 2"
+    !Molecular diffusivity of solutes (single constant value, infinite dilution)
+    kz_mol0 = get_brom_par("kz_mol0")
+    mu0_musw = get_brom_par("mu0_musw")
+    write(*,*) "Sed 3"
+    !Bioturbation
+    kz_bioturb_max = get_brom_par("kz_bioturb_max")
+    z_const_bioturb = get_brom_par("z_const_bioturb")
+    z_decay_bioturb = get_brom_par("z_decay_bioturb")
+    write(*,*) "Sed 4"
+    !Bioirrigation
+    a1_bioirr = get_brom_par("a1_bioirr")
+    a2_bioirr = get_brom_par("a2_bioirr")
+    write(*,*) "Sed 5"
+    !Porosity
+    phi_0 = get_brom_par("phi_0")
+    phi_inf = get_brom_par("phi_inf")
+    z_decay_phi = get_brom_par("z_decay_phi")
+    wat_con_0 = get_brom_par("wat_con_0")
+    wat_con_inf = get_brom_par("wat_con_inf")
+    write(*,*) "Sed 6"
+    !Vertical advection in the sediments
+    w_binf = get_brom_par("w_binf")
+
+    !Density of particles
+    rho_def = get_brom_par("rho_def")
+    rho = 0.0_rk
+    do ip=1,par_max
+        if (is_solid(ip).eq.1) then
+            rho(ip) = get_brom_par('rho_' // trim(par_name(ip)),rho_def)
+            write(*,*) "Assumed density of ", trim(par_name(ip)), " = ", rho(ip)
+        end if
+    end do
+
+    write(*,*) "Sed 7"
+    !!Set useful parameters for calculations
+    !Useful depths
+    z_wat_bbl = z(k_wat_bbl+1) - 0.5_rk*hz(k_wat_bbl+1) !Depth of water-BBL interface
+    z_bbl_sed = z(k_bbl_sed+1) - 0.5_rk*hz(k_bbl_sed+1) !Depth of BBL-sediment interface (SWI)
+    z1(1:k_max) = z(:)-0.5_rk*hz(:)         !Depth of layer interfaces
+    z1(k_max+1) = z(k_max)+0.5_rk*hz(k_max)
+    z_s1 = z1-z_bbl_sed                     !Depth of interfaces wrt SWI
+    write(*,*) "Sed 8"
+    !Useful index vectors
+    k_sed = (/(k,k=k_bbl_sed+1,k_max)/) !Indices of layer midpoints in the sediments
+    k_sed1 = (/(k,k=k_bbl_sed+1,k_max+1)/) !Indices of layer interfaces in the sediments (including the SWI)
+    k_bbl1 = (/(k,k=k_wat_bbl+1,k_bbl_sed)/) !Indices of layer interfaces in the BBL (including the top)
+
+    write(*,*) "Sed 9"
+
+    !!Calculate physical forcings
+    !Assume (t, s, cc, hmix_rate) at layer midpoints; (kz, w_b) on interfaces (as in GOTM and ROMS grids):
+    !Note: kz vertical index starts from 1, not 0 as in e.g. GOTM, ROMS
+    !      Using index starting from 0 leads to array misalignment passing between subroutines (PWA, 11/03/2016)
+    !
+    !========= (air-sea interface) kz(1), w_b(1) (unused)
+    !    o     t(1), s(1), cc(1), hmix_rate(1)
+    !--------- kz(2), w_b(2) = 0
+    !    o     t(2), s(2), cc(2), hmix_rate(2)
+    !    :
+    !    :
+    !    o     t(k_wat_bbl), s(k_wat_bbl), cc(k_wat_bbl), hmix_rate(k_wat_bbl)
+    !========= (water-bbl interface) kz(k_wat_bbl+1) = kz_bbl or kz_bbl_max
+    !    o     t(k_wat_bbl+1), s(k_wat_bbl+1), cc(k_wat_bbl+1), hmix_rate(k_wat_bbl+1) = 0
+    !--------- kz(k_wat_bbl+2) = kz_bbl  (if kz_bbl_type = 0)
+    !    o     t(k_wat_bbl+2), s(k_wat_bbl+2), cc(k_wat_bbl+2), hmix_rate(k_wat_bbl+2) = 0
+    !    :
+    !    :
+    !    o     t(k_bbl_sed), s(k_bbl_sed), cc(k_bbl_sed), hmix_rate(k_bbl_sed) = 0
+    !========= (bbl-sediment interface) kz(k_bbl_sed+1) = 0, w_b(k_bbl_sed+1)
+    !    o     t(k_bbl_sed+1), s(k_bbl_sed+1), cc(k_bbl_sed+1), hmix_rate(k_bbl_sed+1) = 0
+    !--------- kz(k_bbl_sed+2) = 0, w_b(k_bbl_sed+2)
+    !    o     t(k_bbl_sed+2), s(k_bbl_sed+2), cc(k_bbl_sed+2), hmix_rate(k_bbl_sed+2) = 0
+    !    :
+    !    :
+    !    o     t(k_max), s(k_max), cc(k_max), hmix_rate(k_max) = 0
+    !========= (bottom) kz(k_max+1), w_b(k_max+1)
+    kz = 0.0_rk
+    hmix_rate = 0.0_rk
+    hmix_rate = 0.0_rk
+    cc_hmix = 0.0_rk
+    !Calculation below are for water column horizontal index
+  do i = i_min, i_max
+    iday = 1
+    
+    write(*,*) "Sed 10.1"
+    do istep=1,steps_in_yr 
+
+        if (mod(istep,int(86400/input_step)).eq.0) then
+		    iday = iday + 1
+		end if
+		write(*,*) "Sed 10.2"
+        !Salinity (s)
+        s(i,1:k_wat_bbl,istep)       = s_w(i,1:k_wat_bbl,istep)
+        s(i,k_wat_bbl+1:k_max,istep) = s_w(i,k_wat_bbl,istep) !Assume constant below z_wat_bbl
+        write(*,*) "Sed 10.3"
+        !Temperature (t)
+        t(i,1:k_wat_bbl,istep)       = t_w(i,1:k_wat_bbl,istep)
+        t(i,k_wat_bbl+1:k_max,istep) = t_w(i,k_wat_bbl,istep) !Assume constant below z_wat_bbl
+        write(*,*) "Sed 10.4"
+        !Horizontal advection (u_x)
+        u_x(i,1:k_wat_bbl,istep)       = u_x_w(i,1:k_wat_bbl,istep)
+        u_x(i,k_wat_bbl+1:k_max,istep) = 0.0_rk !Assume zero below z_wat_bbl
+
+        write(*,*) "Sed 10.5"
+        !Vertical diffusivity in water column (kz)
+        kz(i,1:k_wat_bbl,istep)      = kz_w(i,1:k_wat_bbl,istep) !Use all values on upper layer interfaces in water column
+
+        if (dynamic_kz_bbl.eq.0) then !Static kz_bbl
+            if (kz_bbl_type.eq.0) then !Constant kz across BBL
+                do k=k_wat_bbl+1,k_bbl_sed
+                    if (z1(k) < (z_bbl_sed-dbl_thickness)) then !Note that kz(k) is at depth z1(k) = z(k)-hz(k)/2
+                        kz(i,k,istep) = kz_bbl_max
+                    else
+                        kz(i,k,istep) = 0.0_rk !eddy diffusivity kz is assumed to be zero within the diffusive boundary layer
+                    end if
+                end do
+            end if
+            if (kz_bbl_type.eq.1) then !Linear kz across BBL (~=> log-layer for velocity, Holtappels & Lorke, 2011)
+                kz_gr = (0.0_rk-kz_bbl_max) / (z_bbl_sed-dbl_thickness-z_wat_bbl)
+                !Note: kz is assumed to reach zero at height dbl_thickness above the SWI
+                do k=k_wat_bbl+1,k_bbl_sed
+                    kz(i,k,istep) = max(0.0_rk, kz_bbl_max + kz_gr * (z1(k)-z_wat_bbl)) !Note that kz(k) is at depth z1(k) = z(k)-hz(k)/2
+                end do
+            end if
+        end if
+        write(*,*) "Sed 10.6"
+        if (dynamic_kz_bbl.eq.1) then !Dynamic kz_bbl
+            kz_gr = (0.0_rk-kz(i,k_wat_bbl,istep)) / (z_bbl_sed-dbl_thickness-z1(k_wat_bbl))
+            do k=k_wat_bbl+1,k_bbl_sed
+                kz(i,k,istep) = max(0.0_rk, kz(i,k_wat_bbl,istep) + kz_gr * (z1(k)-z1(k_wat_bbl))) !Note that kz(k) is at depth z1(k) = z(k)-hz(k)/2
+            end do
+        end if
+        write(*,*) "Sed 10.7"
+        !Warning if the diffusive CFL condition is > 0.5
+        kzCFL(:,istep) = (kz(i,2:k_bbl_sed,istep)*dt/freq_turb)/(dz(1:k_bbl_sed-1)**2)
+        if (diff_method.eq.0.and.maxval(kzCFL(:,istep)).gt.0.5_rk) then
+            write(*,*) "WARNING!!! CFL condition due to eddy diffusivity exceeds 0.5 on day", istep
+            write(*,*) "z_L, kz, kzCFL = "
+            do k=1,k_bbl_sed-1
+                if (kzCFL(k,istep).gt.0.5_rk) write(*,*) z(k)+hz(k)/2, kz(i,k+1,istep), kzCFL(k,istep)
+            end do
+        end if
+        write(*,*) "Sed 10.8"
+        !Horizontal mixing rate (hmix_rate) and reservoir concentrations (cc_hmix)
+        hmix_rate(i,1:k_wat_bbl,istep) = 0.0_rk 
+        cc_hmix(i,1:par_max,1:k_wat_bbl,iday) = 0.0_rk !cc_hmix_w(i,1:par_max,1:k_wat_bbl,iday)
+    end do
+  enddo
+  write(*,*) "Sed 11"
+    !Porosity (phi) (assumed constant in time)
+    phi = 1.0_rk
+    phi_inv = 1.0_rk/phi
+    wat_content = 1.0_rk
+    phi1 = 1.0_rk
+    !Calculation below are for water column horizontal index
+  do i = i_min, i_max
+    phi(i,k_sed) = phi_inf + (phi_0-phi_inf)*exp(-1.0_rk*(z(k_sed)-z_bbl_sed)/z_decay_phi)
+    dphidz_SWI = -1.0_rk * (phi_0-phi_inf) / z_decay_phi
+    !water content (wat_content) (assumed constant in time)
+    wat_content(i,k_sed) = wat_con_inf + (wat_con_0-wat_con_inf)*exp(-1.0_rk*(z(k_sed)-z_bbl_sed)/z_decay_phi)
+    !Porosity on layer interfaces (phi1)
+    phi1(i,k_sed) = phi_inf + (phi_0-phi_inf)*exp(-1.0_rk*(z(k_sed)-0.5_rk*hz(k_sed)-z_bbl_sed)/z_decay_phi)
+    phi1(i,k_max+1) = phi_inf + (phi_0-phi_inf)*exp(-1.0_rk*(z(k_max)+0.5_rk*hz(k_max)-z_bbl_sed)/z_decay_phi)
+  enddo
+  write(*,*) "Sed 12"
+    !Porosity factors used in diffusivity calculations (pF1, pF2)
+    !(assumed constant in time but will vary between solutes vs. solids)
+    !These allow us to use a single equation to model diffusivity updates in the water column and sediments, for both solutes and solids:
+    ! dC/dt = d/dz(pF2*kzti*d/dz(pF1*C)) where C has units [mass per unit total volume (water+sediments)]
+    pF1 = 1.0_rk
+    pF2 = 1.0_rk
+    pWC = 1.0_rk
+    !Calculation below are for water column horizontal index
+  do i = i_min, i_max
+    do ip=1,par_max
+        if (is_solid(ip).eq.0) then !Factors for solutes
+            pF1(i,k_sed,ip) = 1.0_rk/phi(i,k_sed)            !Factor to convert [mass per unit total volume] to [mass per unit volume pore water] for solutes in sediments
+            pF2(i,k_sed1,ip) = phi1(i,k_sed1)                !Porosity-related area restriction factor for fluxes across layer interfaces
+            pWC(i,k_sed,ip) = 1.0_rk/wat_content(i,k_sed)    !Factor to convert [mass per unit total volume] to [mass per unit volume pore water] for solutes in sediments (for analytical data)
+            ! dC/dt = d/dz(kzti*dC/dz)                               in the water column
+            ! dC/dt = d/dz(phi*kzti*d/dz(C/phi))                     in the sediments
+        end if
+        if (is_solid(ip).eq.1) then !Factors for solids
+            pF1(i,k_sed,ip) = 1.0_rk/(1.0_rk - phi(i,k_sed)) !Factor to convert [mass per unit total volume] to [mass per unit volume solids] for solids in sediments
+            pF2(i,k_sed1,ip) = 1.0_rk - phi1(i,k_sed1)       !Porosity-related area restriction factor for fluxes across layer interfaces
+            pWC(i,k_sed,ip) = 1.0_rk/(1.0_rk - wat_content(i,k_sed)) !Factor to convert [mass per unit total volume] to [mass per unit volume solids] for solids in sediments (for analytical data)
+            ! dC/dt = d/dz(kzti*dC/dz)                               in the water column
+            ! dC/dt = d/dz((1-phi)*kzti*d/dz(C/(1-phi)))             in the sediments
+        end if
+    end do
+    !Tortuosity on layer interfaces (following Boudreau 1996, equatoin 4.120)
+    tortuosity(i,:) = sqrt(1.0_rk - 2.0_rk*log(phi1(i,:)))
+  enddo
+  
+  write(*,*) "Sed 13"
+
+    kz_mol = 0.0_rk
+    kz_bio = 0.0_rk
+    alpha = 0.0_rk
+    !Calculation below are for water column horizontal index
+  do i = i_min, i_max
+    !Vertical diffusivity due to effective molecular diffusivity of solutes in the sediments (kz_mol)
+    !(assumed constant in time but in general may vary between solutes)
+    do ip=1,par_max
+        write(*,*) "Sed 14.1"
+        if (is_solid(ip).eq.0) then
+            kz_mol(i,1:k_max+1,ip) = kz_mol0
+            kz_mol(i,k_sed1,ip) = mu0_musw * kz_mol0/(tortuosity(i,k_sed1)**2)
+
+            !Warning if the diffusive CFL condition is > 0.5
+            kz_molCFL(:,ip) = (kz_mol(i,2:k_max,ip)*dt/freq_turb)/(dz(1:k_max-1)**2)
+            if (diff_method.eq.0.and.maxval(kz_molCFL(:,ip)).gt.0.5_rk) then
+                write(*,*) "WARNING!!! CFL condition due to molecular diffusivity exceeds 0.5 for variable", trim(par_name(ip))
+                write(*,*) "z_L, kz_mol, kz_molCFL = "
+                do k=1,k_max-1
+                    write(*,*) "Sed 14.2"
+                    if (kz_molCFL(k,ip).gt.0.5_rk) write(*,*) z(k)+hz(k)/2, kz_mol(i,k+1,ip), kz_molCFL(k,ip)
+                end do
+            end if
+        end if
+    end do
+    write(*,*) "Sed 15"
+    !Vertical diffusivity due to bioturbation (kz_bio)
+    !(assumed constant in time and between solutes/solids)
+    do k=k_bbl_sed+(2-bioturb_across_SWI),k_max+1  !Note: bioturbation diffusivity is assumed to be non-zero on the SWI
+        if (z_s1(k)<z_const_bioturb) then
+            kz_bio(i,k) = kz_bioturb_max
+        else
+            kz_bio(i,k) = kz_bioturb_max*exp(-1.0_rk*(z_s1(k)-z_const_bioturb)/z_decay_bioturb)
+        end if
+    end do
+    write(*,*) "Sed 15.1"
+    !Bioirrigation rate (alpha)
+    !(assumed constant in time and between solutes)
+    alpha(i,k_sed) = a1_bioirr*exp(-1.0_rk*a2_bioirr*(z(k_sed)-z_bbl_sed)) !Schluter et al. (2000), Eqn. 2
+  enddo
+  write(*,*) "Sed 16"
+    !Background vertical advective velocities of particulates and solutes on layer interfaces in the sediments (w_b, u_b)
+    !(these assume steady state compaction and neglect reaction terms)
+    w_b = 0.0_rk
+    u_b = 0.0_rk
+    !Calculation below are for water column horizontal index
+  do i = i_min, i_max
+    w_b(i,k_sed1) = ((1.0_rk - phi_inf)/(1.0_rk - phi1(i,k_sed1))) * w_binf !Boudreau (1997), Eqn 3.67; Holzbecher (2002) Eqn 3
+    u_b(i,k_sed1) = (phi_inf/phi1(i,k_sed1)) * w_binf !Boudreau (1997), Eqn 3.68; Holzbecher (2002) Eqn 12
+    !do k=k_bbl_sed-1,k_max
+    !  w_b(i,:) =  w_binf
+    !  u_b(i,:) =  w_binf
+    !enddo
+  enddo 
+  write(*,*) "Sed 17"
+    !!Write to output file
+    open(12,FILE='Hydrophysics.dat')
+    write(12,'(6hiday  ,5hk    ,5hi    ,11hhz[m]      ,11hz[m]       ,11hz_H[m]     ,9ht[degC]  ,10hs[psu]    ,16hKz_H[m2/s]      ,18hKz_mol1_H[m2/s]   , 18hKz_bio_H[m2/s]    ,15halpha[/s]      ,5hphi  ,14htortuosity_H  ,15hhmix_rate[/d]  ,17hw_bH [1E-10 m/s]  ,17hu_bH [1E-10 m/s]  )')
+        iday=1
+        do istep=1,steps_in_yr
+            if (mod(istep,int(86400/input_step)).eq.0) then
+		        iday = iday + 1
+		    end if
+            do k=1,k_max
+                write (12,'(2(1x,i4))',advance='NO') istep, k
+                do i=1,i_max 
+                    write(12,'(1x,i4,f10.4,1x,f10.4,1x,f10.4,2(1x,f8.4),1x,f15.11,1x,f17.13,1x,f17.13,1x,f15.11,f7.4,1x,f7.4,12x,f7.4,12x,f7.4,12x,f7.4,12x,f7.4,12x,i5)',advance='NO') &
+                        i, hz(k), z(k), (z(k)-0.5_rk*hz(k)),&
+                        t(i,k,istep), s(i,k,istep), kz(i,k,istep), kz_mol(i,k,1), &
+                        kz_bio(i,k), alpha(i,k), phi(i,k), tortuosity(i,k), &
+                        hmix_rate(i,k,istep), 1.E10*w_b(i,k), 1.E10*u_b(i,k), &
+                        u_x(i,k,istep),istep
+                end do
+                write(12,*)
+            end do
+        end do
+    close(12)
+    write(*,*) "Sed 18"
+
+    end subroutine make_physics_bbl_sed
+!=======================================================================================================================
+
+
+
+
+
+
+!=======================================================================================================================
+    subroutine make_physics_bbl_sed_old(t, s, kz, hmix_rate, cc_hmix, u_x, u_x_w, t_w, s_w, kz_w, cc_hmix_w, kz_mol, kz_bio, &
+        z, dz, hz, i_min, i_max, k_wat_bbl, k_bbl_sed, k_max, par_max, steps_in_yr, alpha, is_solid, phi, phi1, phi_inv, &
+        pF1, pF2, mu0_musw, tortuosity, w_b, u_b, rho, dt, freq_turb, par_name, diff_method, bioturb_across_SWI, &
+        ip_sol, ip_par, dphidz_SWI, wat_content,pWC,input_step)
+
+    !Constructs profiles for (temperature, salinity, vertical diffusivity etc.) for the full column (water + sediments)
+    !given water column variability and parameters from brom.yaml
+
+    !Input variables
+    integer, intent(in)                       :: i_min, i_max, k_wat_bbl, k_bbl_sed, k_max, par_max, steps_in_yr, freq_turb
+    integer, intent(in)                       :: diff_method, bioturb_across_SWI, ip_sol, ip_par, input_step
+    integer, dimension(:), intent(in)         :: is_solid
+    real(rk), intent(in)                      :: dt
+    real(rk), dimension(:), intent(in)        :: z, dz, hz
+    real(rk), dimension(:,:,:), intent(in)    :: t_w, s_w, kz_w, u_x_w
+    real(rk), dimension(:,:,:,:), intent(in)  :: cc_hmix_w
+    character(len=attribute_length), dimension(:), intent(in) :: par_name
+
+    !Output variables
+    real(rk)                                  :: mu0_musw, dphidz_SWI
+    real(rk), dimension(:), intent(out)       :: rho
+    real(rk), dimension(:,:), intent(out)     :: kz_bio, alpha, phi, phi_inv, tortuosity, w_b, u_b, wat_content
+    real(rk), dimension(:,:,:), intent(out)   :: t, s, kz, u_x, hmix_rate, kz_mol, pF1, pF2, pWC
+    real(rk), dimension(:,:,:,:), intent(out) :: cc_hmix
+
+    !Local variables
+    integer                                   :: i, k, ip, sel, iday, istep
+    integer                                   :: k_sed(k_max-k_bbl_sed), k_sed1(k_max+1-k_bbl_sed), k_bbl1(k_bbl_sed-k_wat_bbl)
+    real(rk)                                  :: z_wat_bbl, z_bbl_sed, kz_gr, z1(k_max+1), z_s1(k_max+1), phi1(i_max,k_max+1)
+    integer                                   :: kz_bbl_type, dynamic_kz_bbl
+    real(rk)                                  :: kz_bbl_max, dbl_thickness, kz_mol0
+    real(rk)                                  :: a1_bioirr, a2_bioirr
+    real(rk)                                  :: kz_bioturb_max, z_const_bioturb, z_decay_bioturb
+    real(rk)                                  :: phi_0, phi_inf, z_decay_phi, w_binf, rho_def, wat_con_0, wat_con_inf
+    real(rk)                                  :: kzCFL(k_bbl_sed-1,steps_in_yr), kz_molCFL(k_max-1,par_max)
 
 
 
@@ -945,8 +1276,7 @@
     k_sed1 = (/(k,k=k_bbl_sed+1,k_max+1)/) !Indices of layer interfaces in the sediments (including the SWI)
     k_bbl1 = (/(k,k=k_wat_bbl+1,k_bbl_sed)/) !Indices of layer interfaces in the BBL (including the top)
 
-    !Calculation below are for water column horizontal index
-    do i = i_min, i_water
+
 
     !!Calculate physical forcings
     !Assume (t, s, cc, hmix_rate) at layer midpoints; (kz, w_b) on interfaces (as in GOTM and ROMS grids):
@@ -978,25 +1308,40 @@
     kz = 0.0_rk
     hmix_rate = 0.0_rk
     cc_hmix = 0.0_rk
-    do iday=1,days_in_yr
+    !Calculation below are for water column horizontal index
+  do i = i_min, i_max
+    iday = 1
+    do istep=1,steps_in_yr
+		
+		
+
+        if (mod(istep,int(86400/input_step)).eq.0) then
+!		if (mod(istep,24).eq.0) then
+		    iday = iday + 1
+		end if
+		
         !Salinity (s)
-        s(i,1:k_wat_bbl,iday)       = s_w(i,1:k_wat_bbl,iday)
-        s(i,k_wat_bbl+1:k_max,iday) = s_w(i,k_wat_bbl,iday) !Assume constant below z_wat_bbl
+        s(i,1:k_wat_bbl,istep)       = s_w(i,1:k_wat_bbl,istep)
+        s(i,k_wat_bbl+1:k_max,istep) = s_w(i,k_wat_bbl,istep) !Assume constant below z_wat_bbl
 
         !Temperature (t)
-        t(i,1:k_wat_bbl,iday)       = t_w(i,1:k_wat_bbl,iday)
-        t(i,k_wat_bbl+1:k_max,iday) = t_w(i,k_wat_bbl,iday) !Assume constant below z_wat_bbl
+        t(i,1:k_wat_bbl,istep)       = t_w(i,1:k_wat_bbl,istep)
+        t(i,k_wat_bbl+1:k_max,istep) = t_w(i,k_wat_bbl,istep) !Assume constant below z_wat_bbl
+
+        !Horizontal advection (u_x)
+        u_x(i,1:k_wat_bbl,istep)       = u_x_w(i,1:k_wat_bbl,istep)
+        u_x(i,k_wat_bbl+1:k_max,istep) = 0.0_rk !Assume zero below z_wat_bbl
 
         !Vertical diffusivity in water column (kz)
-        kz(i,1:k_wat_bbl,iday)      = kz_w(i,1:k_wat_bbl,iday) !Use all values on upper layer interfaces in water column
+        kz(i,1:k_wat_bbl,istep)      = kz_w(i,1:k_wat_bbl,istep) !Use all values on upper layer interfaces in water column
 
         if (dynamic_kz_bbl.eq.0) then !Static kz_bbl
             if (kz_bbl_type.eq.0) then !Constant kz across BBL
                 do k=k_wat_bbl+1,k_bbl_sed
                     if (z1(k) < (z_bbl_sed-dbl_thickness)) then !Note that kz(k) is at depth z1(k) = z(k)-hz(k)/2
-                        kz(i,k,iday) = kz_bbl_max
+                        kz(i,k,istep) = kz_bbl_max
                     else
-                        kz(i,k,iday) = 0.0_rk !eddy diffusivity kz is assumed to be zero within the diffusive boundary layer
+                        kz(i,k,istep) = 0.0_rk !eddy diffusivity kz is assumed to be zero within the diffusive boundary layer
                     end if
                 end do
             end if
@@ -1004,48 +1349,48 @@
                 kz_gr = (0.0_rk-kz_bbl_max) / (z_bbl_sed-dbl_thickness-z_wat_bbl)
                 !Note: kz is assumed to reach zero at height dbl_thickness above the SWI
                 do k=k_wat_bbl+1,k_bbl_sed
-                    kz(i,k,iday) = max(0.0_rk, kz_bbl_max + kz_gr * (z1(k)-z_wat_bbl)) !Note that kz(k) is at depth z1(k) = z(k)-hz(k)/2
+                    kz(i,k,istep) = max(0.0_rk, kz_bbl_max + kz_gr * (z1(k)-z_wat_bbl)) !Note that kz(k) is at depth z1(k) = z(k)-hz(k)/2
                 end do
             end if
         end if
 
         if (dynamic_kz_bbl.eq.1) then !Dynamic kz_bbl
-            kz_gr = (0.0_rk-kz(i,k_wat_bbl,iday)) / (z_bbl_sed-dbl_thickness-z1(k_wat_bbl))
+            kz_gr = (0.0_rk-kz(i,k_wat_bbl,istep)) / (z_bbl_sed-dbl_thickness-z1(k_wat_bbl))
             do k=k_wat_bbl+1,k_bbl_sed
-                kz(i,k,iday) = max(0.0_rk, kz(i,k_wat_bbl,iday) + kz_gr * (z1(k)-z1(k_wat_bbl))) !Note that kz(k) is at depth z1(k) = z(k)-hz(k)/2
+                kz(i,k,istep) = max(0.0_rk, kz(i,k_wat_bbl,istep) + kz_gr * (z1(k)-z1(k_wat_bbl))) !Note that kz(k) is at depth z1(k) = z(k)-hz(k)/2
             end do
         end if
 
         !Warning if the diffusive CFL condition is > 0.5
-        kzCFL(:,iday) = (kz(i,2:k_bbl_sed,iday)*86400.0_rk*dt/freq_turb)/(dz(1:k_bbl_sed-1)**2)
-        if (diff_method.eq.0.and.maxval(kzCFL(:,iday)).gt.0.5_rk) then
-            write(*,*) "WARNING!!! CFL condition due to eddy diffusivity exceeds 0.5 on day", iday
+        kzCFL(:,istep) = (kz(i,2:k_bbl_sed,istep)*dt/freq_turb)/(dz(1:k_bbl_sed-1)**2)
+        if (diff_method.eq.0.and.maxval(kzCFL(:,istep)).gt.0.5_rk) then
+            write(*,*) "WARNING!!! CFL condition due to eddy diffusivity exceeds 0.5 on day", istep
             write(*,*) "z_L, kz, kzCFL = "
             do k=1,k_bbl_sed-1
-                if (kzCFL(k,iday).gt.0.5_rk) write(*,*) z(k)+hz(k)/2, kz(i,k+1,iday), kzCFL(k,iday)
+                if (kzCFL(k,istep).gt.0.5_rk) write(*,*) z(k)+hz(k)/2, kz(i,k+1,istep), kzCFL(k,istep)
             end do
         end if
 
         !Horizontal mixing rate (hmix_rate) and reservoir concentrations (cc_hmix)
-        hmix_rate(i,1:k_wat_bbl,iday) = hmix_rate_w(i,1:k_wat_bbl,iday)
-        cc_hmix(i,1:par_max,1:k_wat_bbl,iday) = cc_hmix_w(i,1:par_max,1:k_wat_bbl,iday)
+        hmix_rate(i,1:k_wat_bbl,istep) = 0.0_rk 
+        cc_hmix(i,1:par_max,1:k_wat_bbl,iday) = 0.0_rk !cc_hmix_w(i,1:par_max,1:k_wat_bbl,iday)
     end do
-
+  enddo
     !Porosity (phi) (assumed constant in time)
     phi = 1.0_rk
-    phi(i,k_sed) = phi_inf + (phi_0-phi_inf)*exp(-1.0_rk*(z(k_sed)-z_bbl_sed)/z_decay_phi)
     phi_inv = 1.0_rk/phi
-    dphidz_SWI = -1.0_rk * (phi_0-phi_inf) / z_decay_phi
-
-    !water content (wat_content) (assumed constant in time)
     wat_content = 1.0_rk
-    wat_content(i,k_sed) = wat_con_inf + (wat_con_0-wat_con_inf)*exp(-1.0_rk*(z(k_sed)-z_bbl_sed)/z_decay_phi)
-
-    !Porosity on layer interfaces (phi1)
     phi1 = 1.0_rk
+    !Calculation below are for water column horizontal index
+  do i = i_min, i_max
+    phi(i,k_sed) = phi_inf + (phi_0-phi_inf)*exp(-1.0_rk*(z(k_sed)-z_bbl_sed)/z_decay_phi)
+    dphidz_SWI = -1.0_rk * (phi_0-phi_inf) / z_decay_phi
+    !water content (wat_content) (assumed constant in time)
+    wat_content(i,k_sed) = wat_con_inf + (wat_con_0-wat_con_inf)*exp(-1.0_rk*(z(k_sed)-z_bbl_sed)/z_decay_phi)
+    !Porosity on layer interfaces (phi1)
     phi1(i,k_sed) = phi_inf + (phi_0-phi_inf)*exp(-1.0_rk*(z(k_sed)-0.5_rk*hz(k_sed)-z_bbl_sed)/z_decay_phi)
     phi1(i,k_max+1) = phi_inf + (phi_0-phi_inf)*exp(-1.0_rk*(z(k_max)+0.5_rk*hz(k_max)-z_bbl_sed)/z_decay_phi)
-
+  enddo
     !Porosity factors used in diffusivity calculations (pF1, pF2)
     !(assumed constant in time but will vary between solutes vs. solids)
     !These allow us to use a single equation to model diffusivity updates in the water column and sediments, for both solutes and solids:
@@ -1053,6 +1398,8 @@
     pF1 = 1.0_rk
     pF2 = 1.0_rk
     pWC = 1.0_rk
+    !Calculation below are for water column horizontal index
+  do i = i_min, i_max
     do ip=1,par_max
         if (is_solid(ip).eq.0) then !Factors for solutes
             pF1(i,k_sed,ip) = 1.0_rk/phi(i,k_sed)            !Factor to convert [mass per unit total volume] to [mass per unit volume pore water] for solutes in sediments
@@ -1069,20 +1416,24 @@
             ! dC/dt = d/dz((1-phi)*kzti*d/dz(C/(1-phi)))             in the sediments
         end if
     end do
-
     !Tortuosity on layer interfaces (following Boudreau 1996, equatoin 4.120)
     tortuosity(i,:) = sqrt(1.0_rk - 2.0_rk*log(phi1(i,:)))
+  enddo
 
+    kz_mol = 0.0_rk
+    kz_bio = 0.0_rk
+    alpha = 0.0_rk
+    !Calculation below are for water column horizontal index
+  do i = i_min, i_max
     !Vertical diffusivity due to effective molecular diffusivity of solutes in the sediments (kz_mol)
     !(assumed constant in time but in general may vary between solutes)
-    kz_mol = 0.0_rk
     do ip=1,par_max
         if (is_solid(ip).eq.0) then
             kz_mol(i,1:k_max+1,ip) = kz_mol0
             kz_mol(i,k_sed1,ip) = mu0_musw * kz_mol0/(tortuosity(i,k_sed1)**2)
 
             !Warning if the diffusive CFL condition is > 0.5
-            kz_molCFL(:,ip) = (kz_mol(i,2:k_max,ip)*86400.0_rk*dt/freq_turb)/(dz(1:k_max-1)**2)
+            kz_molCFL(:,ip) = (kz_mol(i,2:k_max,ip)*dt/freq_turb)/(dz(1:k_max-1)**2)
             if (diff_method.eq.0.and.maxval(kz_molCFL(:,ip)).gt.0.5_rk) then
                 write(*,*) "WARNING!!! CFL condition due to molecular diffusivity exceeds 0.5 for variable", trim(par_name(ip))
                 write(*,*) "z_L, kz_mol, kz_molCFL = "
@@ -1092,10 +1443,8 @@
             end if
         end if
     end do
-
     !Vertical diffusivity due to bioturbation (kz_bio)
     !(assumed constant in time and between solutes/solids)
-    kz_bio = 0.0_rk
     do k=k_bbl_sed+(2-bioturb_across_SWI),k_max+1  !Note: bioturbation diffusivity is assumed to be non-zero on the SWI
         if (z_s1(k)<z_const_bioturb) then
             kz_bio(i,k) = kz_bioturb_max
@@ -1106,27 +1455,40 @@
 
     !Bioirrigation rate (alpha)
     !(assumed constant in time and between solutes)
-    alpha = 0.0_rk
     alpha(i,k_sed) = a1_bioirr*exp(-1.0_rk*a2_bioirr*(z(k_sed)-z_bbl_sed)) !Schluter et al. (2000), Eqn. 2
-
+  enddo
     !Background vertical advective velocities of particulates and solutes on layer interfaces in the sediments (w_b, u_b)
     !(these assume steady state compaction and neglect reaction terms)
     w_b = 0.0_rk
     u_b = 0.0_rk
+    !Calculation below are for water column horizontal index
+  do i = i_min, i_max
     w_b(i,k_sed1) = ((1.0_rk - phi_inf)/(1.0_rk - phi1(i,k_sed1))) * w_binf !Boudreau (1997), Eqn 3.67; Holzbecher (2002) Eqn 3
     u_b(i,k_sed1) = (phi_inf/phi1(i,k_sed1)) * w_binf !Boudreau (1997), Eqn 3.68; Holzbecher (2002) Eqn 12
-
-  enddo !"i" cycle
+    !do k=k_bbl_sed-1,k_max
+    !  w_b(i,:) =  w_binf
+    !  u_b(i,:) =  w_binf
+    !enddo
+  enddo 
 
     !!Write to output file
     open(12,FILE='Hydrophysics.dat')
     write(12,'(6hiday  ,5hk    ,5hi    ,11hhz[m]      ,11hz[m]       ,11hz_H[m]     ,9ht[degC]  ,10hs[psu]    ,16hKz_H[m2/s]      ,18hKz_mol1_H[m2/s]   , 18hKz_bio_H[m2/s]    ,15halpha[/s]      ,5hphi  ,14htortuosity_H  ,15hhmix_rate[/d]  ,17hw_bH [1E-10 m/s]  ,17hu_bH [1E-10 m/s]  )')
-        do iday=1,days_in_yr
+        iday=1
+        do istep=1,steps_in_yr
+            if (mod(istep,int(86400/input_step)).eq.0) then
+!            if (mod(istep,24).eq.0) then
+		        iday = iday + 1
+		    end if
             do k=1,k_max
-                write (12,'(2(1x,i4))',advance='NO') iday, k
-                do i=1,i_max
-                    write(12,'(1x,i4,f10.4,1x,f10.4,1x,f10.4,2(1x,f8.4),1x,f15.11,1x,f17.13,1x,f17.13,1x,f15.11,f7.4,1x,f7.4,12x,f7.4,12x,f7.4,12x,f7.4)',advance='NO') i, hz(k), z(k), (z(k)-0.5_rk*hz(k)),&
-                        t(i,k,iday), s(i,k,iday), kz(i,k,iday), kz_mol(i,k,1), kz_bio(i,k), alpha(i,k), phi(i,k), tortuosity(i,k), hmix_rate(i,k,iday), 1.E10*w_b(i,k), 1.E10*u_b(i,k)
+                write (12,'(2(1x,i4))',advance='NO') istep, k
+                do i=1,i_max 
+                    write(12,'(1x,i4,f10.4,1x,f10.4,1x,f10.4,2(1x,f8.4),1x,f15.11,1x,f17.13,1x,f17.13,1x,f15.11,f7.4,1x,f7.4,12x,f7.4,12x,f7.4,12x,f7.4,12x,f7.4,12x,i5)',advance='NO') &
+                        i, hz(k), z(k), (z(k)-0.5_rk*hz(k)),&
+                        t(i,k,istep), s(i,k,istep), kz(i,k,istep), kz_mol(i,k,1), &
+                        kz_bio(i,k), alpha(i,k), phi(i,k), tortuosity(i,k), &
+                        hmix_rate(i,k,istep), 1.E10*w_b(i,k), 1.E10*u_b(i,k), &
+                        u_x(i,k,istep),istep
                 end do
                 write(12,*)
             end do
@@ -1134,11 +1496,8 @@
     close(12)
 
 
-    end subroutine make_physics_bbl_sed
+    end subroutine make_physics_bbl_sed_old
 !=======================================================================================================================
-
-
-
 
 
 

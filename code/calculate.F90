@@ -22,13 +22,14 @@
 
     implicit none
     private
-    public calculate_light, calculate_phys, calculate_sed
+    public calculate_light, calculate_phys, calculate_sed, calculate_sed_eya, calculate_bubble
 
 
     contains
 
 !=======================================================================================================================
-    subroutine calculate_light(julianday, i, k_bbl_sed, k_max, par_max, hz, Eair, use_Eair, hice, cc, is_solid, rho, Izt)
+   subroutine calculate_light(julianday, i, k_bbl_sed, k_max, par_max, hz, Eair, use_Eair, &
+                              hice, use_hice, cc, is_solid, rho, Izt)
 
     !Calculates photosynthetically active radiation (PAR = Izt) thoughout water column and sediments
 
@@ -37,7 +38,7 @@
     implicit none
 
     !Input variables
-    integer, intent(in)                         :: julianday, k_bbl_sed, k_max, par_max, use_Eair
+    integer, intent(in)                         :: julianday, k_bbl_sed, k_max, par_max, use_Eair, use_hice
     integer, dimension(:), intent(in)           :: is_solid
     real(rk), dimension(:), intent(in)          :: hz, Eair, hice, rho
     real(rk), dimension(:,:,:), intent(in)      :: cc
@@ -54,7 +55,7 @@
     real(rk)     :: kESS                       !attenuation due to suspended silt
     real(rk)     :: ESS                        !assumed (constant) concentration of suspended silt
     real(rk)     :: kPhy                       !attenuation due to phytoplankton
-    real(rk)     :: kPON                       !attenuation due to particulate organic matter
+    real(rk)     :: kPOML                       !attenuation due to particulate organic matter
     real(rk)     :: kHet                       !attenuation due to zooplankton
     real(rk)     :: kDON                       !attenuation due to dissolved organic matter
     real(rk)     :: kB                         !attenuation due to bacteria
@@ -84,7 +85,7 @@
         kESS = get_brom_par("kESS")
         ESS = get_brom_par("ESS")
         kPhy = get_brom_par("kPhy")
-        kPON = get_brom_par("kPON")
+        kPOML = get_brom_par("kPOML")
 
     if (light_model.eq.1) then
         kHet = get_brom_par("kHet")
@@ -95,7 +96,7 @@
 
 
     !Compute surface shortwave downwelling irradiance [W m^-2, 24-hr average]
-    if (use_Eair.eq.0) then
+    if (use_Eair.lt.1) then
         decl = 23.5_rk*sin(2.0_rk*pi*(real(julianday,rk)-81.0_rk)/365.0_rk) !Solar declination in degrees
         Iot = max(0.0_rk, Io*cos((lat_light-decl)*pi/180.0_rk))
         !This is the approximation used in Yakushev and Sorensen (2013) for OXYDEP
@@ -108,32 +109,36 @@
     Izt(i,:) = 0.0_rk
     buffer = Iot                    !24-hr average downwelling shortwave irradiance in air <E_d>_24(air) [W/m2]
     buffer = buffer*Eair_to_PAR0    !Factor to convert <E_d>_24(air) to scalar 24-hr average PAR in water <PAR_o>_24(0)
-    buffer = buffer*max(0.0_rk, (1.0_rk-hice(julianday)/0.6_rk)) !Attenuation due to ice (soon to be replaced by ice module)
-
+    if (use_hice.gt.0) then
+      buffer = buffer*max(0.0_rk, (1.0_rk-hice(julianday)/0.6_rk)) !Attenuation due to ice (soon to be replaced by ice module)
+    endif
     if (buffer.gt.0.0_rk) then
         do k=1,k_max
             !If in the sediments set PAR(z) to zero, otherwise calculate layer-average PAR(z)
             if (k.le.k_bbl_sed) then !This is simplest (and safest) criterion
                 if (light_model.eq.0) then !Simple model from ersem/light.f90
-!                    xk = k0r + kESS*ESS + kPhy*cc(i,k,id_Phy) + kPON*cc(i,k,id_PON)
-                    xk = k0r + kESS*ESS + kPhy*cc(i,k,2) + kPON*cc(i,k,4)  !case OxyDep                    
-                    !Attenuation over layer k [m^-1] due to background, suspended sediment, phytoplankton, and PON
-                else if (light_model.eq.2) then   
-                    xk = k0r + kESS*ESS + kPhy*cc(i,k,id_Phy) + kPON*cc(i,k,id_PON)                    
-                end if
+!                    xk = k0r + kESS*ESS + kPhy*cc(i,k,id_Phy) + kPOML*cc(i,k,id_POML)
+                    xk = k0r + kESS*ESS + kPhy*cc(i,k,id_Phy) + kPOML*(cc(i,k,id_POML)+cc(i,k,id_POMR))
+                    !Attenuation over layer k [m^-1] due to background, suspended sediment, phytoplankton, and POML
+                endif
+
                 if (light_model.eq.1) then !Extended model accounting for other particulate species modelled in BROM
-                    xk = k0r + kESS*ESS + kPhy*cc(i,k,id_Phy) + kPON*cc(i,k,id_PON) + &
-                        kHet*cc(i,k,id_Het) + kDON*cc(i,k,id_DON) + &
-                        kB*(cc(i,k,id_Baae)+cc(i,k,id_Baan)+cc(i,k,id_Bhae)+cc(i,k,id_Bhan))
+                    xk = k0r + kESS*ESS + kPhy*cc(i,k,id_Phy) + kPOML*(cc(i,k,id_POML)+cc(i,k,id_POMR)) &
+                        + kHet*cc(i,k,id_Het) + kDON*(cc(i,k,id_DOML)+cc(i,k,id_DOMR)) &
+                        + kB*(cc(i,k,id_Baae)+cc(i,k,id_Baan)+cc(i,k,id_Bhae)+cc(i,k,id_Bhan))
                     do ip=1,par_max
-                        if (is_solid(ip).eq.1.and.ip.ne.id_Phy.and.ip.ne.id_PON.and.ip.ne.id_Het) then
+                        if (is_solid(ip).eq.1.and.ip.ne.id_Phy.and.ip.ne.id_POML.and.ip.ne.id_POMR.and.ip.ne.id_Het) then
                             xk = xk + kPIV*cc(i,k,ip)/rho(ip)
                         end if
                     end do
-                    !Attenuation over layer k [m^-1] due to background, suspended sediment, phytoplankton, PON, zooplankton,
+                    !Attenuation over layer k [m^-1] due to background, suspended sediment, phytoplankton, POML, zooplankton,
                     !dissolved organic nitrogen, bacteria, and particulate inorganic volume fraction
                 end if
-
+                
+                if (light_model.eq.2) then   
+                    xk = k0r + kESS*ESS + kPhy*cc(i,k,id_Phy) + kPOML*cc(i,k,id_POM)  !case OxyDep                    
+                end if
+                
                 xtnc = xk*hz(k)     !Extinction over layer k with thickness hz(k)
                 extfac = exp(-xtnc) !Extinction factor due to layer k (0<extfac<1)
                 Izt(i,k) = buffer/xtnc*(1.0_rk-extfac)
@@ -149,7 +154,6 @@
 
     end subroutine calculate_light
 !=======================================================================================================================
-
 
 
 
@@ -199,7 +203,7 @@
 
 
 
-    dtt = 86400.0_rk*dt/freq_turb !Turbulence model time step [seconds]
+    dtt = dt/freq_turb !Turbulence model time step [seconds]
     dcc = 0.0_rk
 
 
@@ -232,16 +236,17 @@
 
             !Water column layer interfaces, not including the SWI
             do k=2,k_bbl_sed
-                fick(i,k,:) = -1.0_rk * kzti(i,k,:) * (cc(i,k,:)-cc(i,k-1,:)) / dz(k-1)
+!                fick(i,k,:) = -1.0_rk * kzti(i,k,:) * (cc(i,k,:)-cc(i,k-1,:)) / dz(k-1)
+                fick(i,k,:) = -1.0_rk * 100000.0_rk*kzti(i,k,:) * (cc(i,k,:)-cc(i,k-1,:)) / dz(k-1) /100000.0_rk
             end do
 
             !Sediment-water interface (SWI)
             k = k_bbl_sed+1
-            if (bioturb_across_SWI.eq.0) fick(i,k,:) = -1.0_rk * pF2(i,k,:) * kzti(i,k,:) * (pF1(i,k,:)*cc(i,k,:)-cc(i,k-1,:)) / dz(k-1)
+            if (bioturb_across_SWI.eq.0) fick(i,k,:) = -1.0_rk * pF2(i,k,:) * 100000.0_rk*kzti(i,k,:) * (pF1(i,k,:)*cc(i,k,:)-cc(i,k-1,:)) / dz(k-1)/100000.0_rk
             !If not including bioturbation across the SWI, kzti will be zero for particles so we do not need to worry
             !about the Fickian gradient. Here fick will only represent molecular diffusion.
             if (bioturb_across_SWI.eq.1) then
-                fick(i,k,:) = -1.0_rk * pF2(i,k,:) * kz_mol(i,k,:) * (pF1(i,k,:)*cc(i,k,:)-cc(i,k-1,:)) / dz(k-1)
+                fick(i,k,:) = -1.0_rk * pF2(i,k,:) * 100000.0_rk*kz_mol(i,k,:) * (pF1(i,k,:)*cc(i,k,:)-cc(i,k-1,:)) / dz(k-1)/100000.0_rk
                 !Molecular part is only applied to solutes (kz_mol = 0 for particulates); this mixes [mass/unit volume water] (intraphase mixing)
                 fick(i,k,:) = fick(i,k,:) - kz_bio(i,k) * O2stat * (cc(i,k,:)-cc(i,k-1,:)) / dz(k-1)
                 !Bioturbation part applies to both and mixes the concentrations in [mass/unit total volume] either side of SWI (interphase mixing)
@@ -249,7 +254,7 @@
 
             !Sediment layer interfaces, not including the SWI
             do k=k_bbl_sed+2,k_max
-                fick(i,k,:) = -1.0_rk * pF2(i,k,:) * kzti(i,k,:) * (pF1(i,k,:)*cc(i,k,:)-pF1(i,k-1,:)*cc(i,k-1,:)) / dz(k-1)
+                fick(i,k,:) = -1.0_rk * pF2(i,k,:) * 100000.0_rk*kzti(i,k,:) * (pF1(i,k,:)*cc(i,k,:)-pF1(i,k-1,:)*cc(i,k-1,:)) / dz(k-1)/100000.0_rk
                 !Note: pF1 accounts for a porosity factor in the Fickian gradient for solutes and solids in the sediments
                 !      Since we are modelling as [mass per unit total volume], this is needed to convert to [mass per unit volume pore water] or [mass per unit volume solid]
                 !      in order to calculate the Fickian gradient for solutes and solids respectively (Berner 1980; Boudreau 1997; Soetaert et al. 1996).
@@ -304,7 +309,7 @@
             end do
             !cc intermediate layers
             do k=2,(k_max-1)
-                cc(i,k,:) = cc(i,k,:) + dtt*dcc(i,k,:)
+                cc(i,k,:) = max(0.0_rk,cc(i,k,:) + dtt*dcc(i,k,:))
             end do
             !cc bottom layer
             do ip=1,par_max
@@ -433,7 +438,7 @@
         cc(i,:,:) = max(cc0, cc(i,:,:)) !Impose resilient concentration
     end do
 
-    end subroutine calculate_phys
+        end subroutine calculate_phys
 !=======================================================================================================================
 
 
@@ -480,7 +485,7 @@
     integer  :: i, k, ip, idf
 
 
-    dtt = 86400.0_rk*dt/freq_sed !Sedimentation model time step [seconds]
+    dtt = dt/freq_sed !Sedimentation model time step [seconds]
     dcc = 0.0_rk
 !    sink = 0.0_rk
     w_1 = 0.0_rk
@@ -653,8 +658,258 @@
         cc(i,:,:) = max(cc0, cc(i,:,:)) !Impose resilient concentration
     end do
 
-    end subroutine calculate_sed
+        end subroutine calculate_sed
 !=======================================================================================================================
+
+
+
+
+
+!=======================================================================================================================
+    subroutine calculate_sed_eya(i, k_max, par_max, model, cc, wti, sink, &
+        dcc, dVV, bctype_top, bctype_bottom, bc_top, bc_bottom, &
+        hz, dz, k_bbl_sed, wbio, w_b, u_b, julianday, dt, freq_sed, &
+        dynamic_w_sed, constant_w_sed, is_solid, rho, phi1, fick, &
+        k_sed1, K_O2s, kz_bio, fresh_PM_poros, id_O2, dphidz_SWI, &
+        cc0, bott_flux, bott_source, w_binf, bu_co)
+
+    !Calculates vertical advection (sedimentation) in the water column and sediments
+
+    use fabm, only: type_model, fabm_get_vertical_movement, fabm_do_bottom 
+
+    implicit none
+
+    !Input variables
+    integer, intent(in)                         :: k_max, par_max, id_O2, julianday, freq_sed
+    integer, intent(in)                         :: k_bbl_sed, dynamic_w_sed, constant_w_sed
+    integer, dimension(:,:), intent(in)         :: bctype_top, bctype_bottom
+    integer, dimension(:), intent(in)           :: is_solid, k_sed1
+    real(rk), dimension(:,:,:), intent(in)      :: fick
+    real(rk), dimension(:,:), intent(in)        :: bc_top, bc_bottom, phi1, w_b, u_b, kz_bio
+    real(rk), dimension(:), intent(in)          :: hz, dz, rho
+    real(rk), intent(in)                        :: dt, K_O2s, dphidz_SWI, cc0
+    real(rk), intent(in)                        :: fresh_PM_poros, w_binf, bu_co
+
+    !Output variables
+    real(rk), dimension(:,:,:), intent(out)     :: wbio, wti
+    real(rk), dimension(:,:,:), intent(out)     :: sink, dcc
+    real(rk), dimension(:,:), intent(out)       :: bott_flux, bott_source
+ 
+    !Input/output variables
+    type (type_model), intent(inout)            :: model
+    real(rk), dimension(:,:,:), intent(inout)   :: cc, dVV
+
+    !Local variables
+    real(rk) :: dtt, O2stat
+    real(rk) :: w_1m(k_max+1,par_max), w_1(k_max+1), u_1(k_max+1), w_1c(k_max+1), u_1c(k_max+1)
+    integer  :: i, k, ip, idf
+
+
+    dtt = dt/freq_sed !Sedimentation model time step [seconds]
+    dcc = 0.0_rk
+!    sink = 0.0_rk
+    w_1 = 0.0_rk
+    u_1 = 0.0_rk
+    w_1c = 0.0_rk
+    u_1c = 0.0_rk
+    sink(i,:,:) = 0.0_rk
+
+    !Compute vertical velocity in water column (sinking/floating) using the FABM.
+    wbio = 0.0_rk
+    do k=1,k_max
+!        i = real(i)
+        call fabm_get_vertical_movement(model, i, i, k, wbio(i:i,k,:))  !Note: wbio is on layer midpoints
+    end do
+    wbio = -1.0_rk*wbio !FABM returns NEGATIVE wbio for sinking; sign change
+    ! here means that wbio is POSITIVE for sinking; we also make zero wbio for bubbles floating
+
+    ! wti() at water column layer midpoints including Air-sea interface (unused) 
+    !    and not including SWI:  (as wbio in FABM) 
+        wti(i,1:k_bbl_sed,:) = max(0.0_rk,wbio(i,1:k_bbl_sed,:))
+        wti(i,1,:) = 0.0_rk
+
+    if (constant_w_sed.ne.0) then  ! case constant burial velosity
+        
+    ! wti() at sediment layer midpoints: w_b, backgound burying velocity
+    do k=k_bbl_sed,k_max+1
+        do ip=1,par_max
+           wti(i,k,ip) = w_binf
+        enddo
+    enddo
+    
+    ! Apply "Burial coeficient" to increase wti () exactly to the SWI at proportional to the
+    !    settling velocity in the water column (0<bu_co<1)
+    do ip=1,par_max
+          wti(i,k_bbl_sed,ip) = wti(i,k_bbl_sed,ip) + bu_co*wti(i,k_bbl_sed-1,ip)
+    end do
+    
+    endif
+    
+    if (dynamic_w_sed.ne.0) then ! case  burial velosity depending on particles accumulation above SWI
+    ! we accelerate burying rate due to an increase of particles volume dVV()[m3/sec] in water layer just above SWI
+        do k=(k_bbl_sed+1),k_max !  do k=1,k_max !        do k=k_bbl_sed,k_max
+            do ip=1,par_max
+!                wti(i,k,ip) = wti(i,k,ip) + max(0.0_rk,dVV(i,k_bbl_sed,1))/fresh_PM_poros !/dz(k_bbl_sed)
+                wti(i,k,ip) = wti(i,k,ip) + min(max(0.0_rk,dVV(i,k_bbl_sed,1)) &
+                     *dz(k_bbl_sed)/(1.0_rk-fresh_PM_poros),(dz(k_bbl_sed)*dtt))  
+                ! wti() increases on burying rate, that depends of change of particles volume in the layer above the SWI and can not be higher than defined by CFL criteria)
+            end do
+        enddo
+    endif
+
+    ! Perform sinking advective flux calculation and cc update
+    ! This uses a simple first order upwind differencing scheme (FUDM)
+    ! It uses the fluxes sink in a consistent manner and therefore conserves mass
+    do idf=1,freq_sed
+        !Calculate sinking fluxes at layer interfaces (sink, units strictly [mass/unit total area/second])
+        sink(i,1,:) = 0.0_rk
+        !Water column and sediment layer interfaces
+        do ip=1,par_max
+            do k=1,k_max
+                sink(i,k,ip) = ((100000.0_rk*wti(i,k,ip))*cc(i,k,ip))/100000.0_rk
+            end do
+        enddo
+
+        !!Calculate tendencies dcc = dcc/dt = -dF/dz on layer midpoints (top/bottom not used where Dirichlet bc imposed)
+        do k=2,k_max
+            dcc(i,k,:) = (sink(i,k-1,:)-sink(i,k,:)) / hz(k) !-1)
+        end do
+            dcc(i,1,:) = - sink(i,1,:)/ hz(1)
+!        sink(i,k_max,:)=sink(i,k_max-1,:)
+
+        !!Time integration
+        do ip=1,par_max
+            if (bctype_top(i,ip).gt.0) then
+                cc(i,1,ip) = bc_top(i,ip)
+            else
+                cc(i,1,ip) = cc(i,1,ip) + dtt*dcc(i,1,ip) !Simple Euler time step of size dtt = dt/freq_sed [s]
+            end if
+        end do
+        !cc intermediate layers
+        do k=2,(k_max-1)
+            cc(i,k,:) = cc(i,k,:) + dtt*dcc(i,k,:)
+        end do
+        !cc bottom layer
+        bott_flux = 0.0_rk
+        bott_source = 0.0_rk       
+        call fabm_do_bottom(model, i, i, bott_flux(i:i,:),bott_source(i:i,:))
+        do ip=1,par_max
+            if (is_solid(ip).eq.1) then            
+                dcc(i,k_max,ip) = dcc(i,k_max,ip) + bott_flux(i,ip) / hz(k_max)
+                sink(i,k_max+1,:) = bott_flux(i,:)
+            endif
+        end do
+!            cc(i,k_max,ip) = cc(i,k_max,ip) + dtt*dcc(i,k_max,ip)               
+        do ip=1,par_max
+            if (bctype_bottom(i,ip).gt.0) then
+                cc(i,k_max,ip) = bc_bottom(i,ip)
+            else
+                cc(i,k_max,ip) = cc(i,k_max,ip) + dtt*dcc(i,k_max,ip)
+            end if
+        end do
+        cc(i,:,:) = max(cc0, cc(i,:,:)) !Impose resilient concentration
+    end do
+
+    end subroutine calculate_sed_eya
+!=======================================================================================================================
+        
+        
+        
+        
+!=======================================================================================================================
+    subroutine calculate_bubble(i, k_max, par_max, model, cc, sink, N_bubbles, &
+        dcc, hz, dz, z, t, k_bbl_sed, julianday, dt, freq_float, is_gas, wbio, cc0)
+
+    !Calculates floating of bubbles in the water column and sediments
+
+    use fabm, only: type_model, fabm_get_vertical_movement, fabm_do_bottom 
+
+    implicit none
+
+    !Input variables
+    integer, intent(in)                         :: k_max, par_max, julianday, freq_float
+    integer, intent(in)                         :: k_bbl_sed
+    integer, dimension(:), intent(in)           :: is_gas 
+    real(rk), dimension(:), intent(in)          :: hz, dz, z
+    real(rk), dimension(:,:,:), intent(in)      :: t
+    real(rk), intent(in)                        :: dt, cc0, N_bubbles
+
+    !Output variables
+    real(rk), dimension(:,:,:), intent(out)     :: wbio
+    real(rk), dimension(:,:,:), intent(out)     :: sink, dcc
+ !   real(rk), dimension(:,:), intent(out)       :: bott_flux, bott_source
+ 
+    !Input/output variables
+    type (type_model), intent(inout)            :: model
+    real(rk), dimension(:,:,:), intent(inout)   :: cc
+
+    !Local variables
+    real(rk) :: dtt, rb, wbub(k_max+1)
+    integer  :: i, k, ip, idf
+
+    dtt = 86400.0_rk*dt/freq_float !Sedimentation model time step [seconds]
+    dcc = 0.0_rk
+!    sink(i,:,:) = 0.0_rk
+    !Compute vertical velocity in water column (sinking/floating) using the FABM.
+    wbio = 0.0_rk
+    do k=1,k_max
+        call fabm_get_vertical_movement(model, i, i, k, wbio(i:i,k,:))  !Note: wbio is on layer midpoints
+    end do
+    wbio = -1.0_rk * wbio !FABM returns NEGATIVE wbio for sinking; sign change here means that wbio is POSITIVE for sinking
+    ! Perform rise advective flux calculation and cc update
+    ! This uses a simple first order upwind differencing scheme (FUDM)
+    ! It uses the fluxes sink in a consistent manner and therefore conserves mass
+    wbub= 0.0_rk
+
+    do ip=1,par_max
+      if (is_gas(ip).eq.1) then
+!        do idf=1,1 !freq_float
+    !Calculate floating fluxes at layer interfaces (sink, units strictly [mass/unit total area/second])
+          do k=1,k_max-1
+            rb = 100._rk * &     !bubble radius in [cm] (details in brom_bubble), we convert to [m]
+                (cc(i,k,ip)*0.001_rk*8.314_rk*(273.15_rk+t(i,k,julianday))/(101325.0_rk &
+                +z(k)*101325.0_rk/10.3_rk) &                        ! Volume of gas
+                /N_bubbles*3.0_rk/4.0_rk/3.14159_rk)**(1.0_rk/3.0_rk)
+!            if(rb.gt.0.0000001) then
+!              if (rb.lt.0.4) then
+!                wbub(k)=  -(22.16_rk+0.733_rk*(rb-0.0000000584_rk)**(-0.0849_rk)) &   ! rate of rise
+!                         *exp(4.792e-4_rk*t(i,k,julianday)*(rb-0.0000000584_rk)**(-0.815_rk)) &
+!                         /100._rk !into m/s          
+!              else
+!                wbub(k)= -19.16_rk/100._rk !into m/s
+!              endif
+!!                if(wbub(k).lt.wbio(i,k,ip)) wbub(k)=wbio(i,k,ip)
+!!                if(wbub(k).gt.0.0) wbub(k)=0.0_rk
+!            endif
+              if(rb.gt.0.000001) then
+                wbub(k) = - rb*(276._rk+ rb*(-1648._rk+rb*(4882._rk &
+                           +rb*(-7429._rk+rb*(5618._rk+rb*(-1670._rk))))))
+                if(wbub(k).lt.wbio(i,k,ip)) wbub(k)=wbio(i,k,ip)
+              else
+                wbub(k) = 0.0_rk
+              endif
+          end do
+          do k=1,k_max-1
+              sink(i,k,ip) = -((100000.0_rk*wbub(k))*cc(i,k,ip))/100000.0_rk
+              sink(i,k,ip) = max((dtt*sink(i,k,ip)+cc(i,k,ip)),0.0_rk)
+!!            sink(i,k,ip) = -((100000.0_rk*wbub(k+1))*cc(i,k,ip))/100000.0_rk
+          end do
+    !Calculate tendencies dcc = dcc/dt = -dF/dz on layer midpoints (top/bottom not used where Dirichlet bc imposed)
+          do k=1,k_max-1
+            dcc(i,k,ip) = (sink(i,k+1,ip)-sink(i,k,ip))/hz(k) !-1)
+          end do
+    !Integrate cc() on layer midpoints 
+          do k=1,(k_max-1)
+            cc(i,k,ip) = max((cc(i,k,ip) + dtt*dcc(i,k,ip)),0.0_rk)
+          end do
+!        enddo
+      endif
+      enddo
+    !Impose resilient concentration
+!    cc(i,:,:) = max(cc0, cc(i,:,:)) 
+
+    end subroutine calculate_bubble
+!===================================================================================
 
 
     end module calculate
